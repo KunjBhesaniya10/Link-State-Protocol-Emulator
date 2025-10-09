@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 
 #define DEST_PORT 8080
-#define DEST_IP "10.51.11.2"
+#define DEST_IP "10.17.44.176"
 
 using namespace std;
 
