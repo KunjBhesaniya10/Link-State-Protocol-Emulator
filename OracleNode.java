@@ -2,6 +2,7 @@ import java.net.*;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Scanner;
+import java.util.concurrent.ScheduledExecutorService;
 import java.io.*;
 import java.util.HashMap;
 import java.util.List;
@@ -14,7 +15,9 @@ public class OracleNode {
    record Edge(Character target, int weight){}
     
    HashMap<Character,SocketChannel> clientChannels; // list of connected clients
+   HashMap<SocketChannel,Character> channelToClientId;
    HashMap<Character,List<Edge>> AdjacencyList; // adjacency list for the graph
+   HashMap<Character,List<byte[]>> ipPortInfo; // to store ip and port info of clients
    String configFile = "config.txt";
    long lastModified = 0;
    Selector selector;
@@ -22,11 +25,19 @@ public class OracleNode {
    ServerSocketChannel serverChannel;
    int port;
    char newClientId = 'A';
+   int connectedClients;
+   int totalClients;
+   Boolean FirstTime = true;
 
    OracleNode(int port){
         this.port = port;
         clientChannels = new HashMap<>();
+        channelToClientId = new HashMap<>();
         AdjacencyList = new HashMap<>();
+        ipPortInfo = new HashMap<>();
+        connectedClients = 0;
+        monitorConfigFile();
+        totalClients = AdjacencyList.size();
         try{
             this.selector = Selector.open();
             this.serverChannel = ServerSocketChannel.open();
@@ -45,6 +56,7 @@ public class OracleNode {
         clientChannel.configureBlocking(false);
         clientChannel.register(selector, SelectionKey.OP_READ);
         clientChannels.put(newClientId, clientChannel);
+        channelToClientId.put(clientChannel, newClientId);
         System.err.println("Registered new client with ID: " + newClientId);
         newClientId++;
     }
@@ -60,52 +72,102 @@ public class OracleNode {
     //  }
     // }
 
-   void monitorConfigFile(){
+    Boolean monitorConfigFile(){
     // monitor the config file for changes and update the adjacency list
-    File file = new File(configFile);
-    if(file.lastModified() > lastModified){
-        lastModified = file.lastModified();
-        try(BufferedReader br = new BufferedReader(new FileReader(file))){
-            String line;
-            Character node = 'A';
-            while((line = br.readLine()) != null){
-                line = line.trim();
-                if(line.isEmpty() || line.startsWith("#")){
-                    continue; // skip empty lines and comments
-                }
-                String[] parts = line.split("\\s+");
-                // System.err.println(parts.length + " parts found in line: " + line);
-                int j=0;
-                while(j < parts.length && parts[j].isEmpty()){
-                    j++;
-                }
-                AdjacencyList.put(node, new java.util.ArrayList<>());
-                char tmp = (char)(node.charValue() + 1);
-                while(j < parts.length){
-                    // System.err.println("Adding edge from " + node + " to " + tmp + " with weight " + parts[j]);
-                    if(Integer.parseInt(parts[j])  == -1){
+        File file = new File(configFile);
+        if(file.lastModified() > lastModified){  
+            try(BufferedReader br = new BufferedReader(new FileReader(file))){
+                String line;
+                Character node = 'A';
+                while((line = br.readLine()) != null){
+                    line = line.trim();
+                    if(line.isEmpty() || line.startsWith("#")){
+                        continue; // skip empty lines and comments
+                    }
+                    String[] parts = line.split("\\s+");
+                    // System.err.println(parts.length + " parts found in line: " + line);
+                    int j=0;
+                    while(j < parts.length && parts[j].isEmpty()){
+                        j++;
+                    }
+                    AdjacencyList.put(node, new java.util.ArrayList<>());
+                    char tmp = (char)(node.charValue() + 1);
+                    while(j < parts.length){
+                        // System.err.println("Adding edge from " + node + " to " + tmp + " with weight " + parts[j]);
+                        if(Integer.parseInt(parts[j])  == -1){
+                            j++;
+                            tmp++;
+                            continue;
+                        }
+                        AdjacencyList.get(node).add(new Edge(Character.valueOf(tmp), Integer.parseInt(parts[j])));
+                        AdjacencyList.putIfAbsent(tmp, new java.util.ArrayList<>());
+                        AdjacencyList.get(tmp).add(new Edge(Character.valueOf(node), Integer.parseInt(parts[j])));
                         j++;
                         tmp++;
-                        continue;
                     }
-                    AdjacencyList.get(node).add(new Edge(Character.valueOf(tmp), Integer.parseInt(parts[j])));
-                    AdjacencyList.putIfAbsent(tmp, new java.util.ArrayList<>());
-                    AdjacencyList.get(tmp).add(new Edge(Character.valueOf(node), Integer.parseInt(parts[j])));
-                    j++;
-                    tmp++;
+                    node = (char)(node.charValue() + 1);
                 }
-                node = (char)(node.charValue() + 1);
+            }
+            catch(Exception e){
+                e.printStackTrace();
+            }
+
+            return true;
+        }
+        return false;
+    }
+
+    int addIpPortToMessage(byte[] message, int index, Character clientId){
+        try{
+            List<byte[]> ownIpPort = ipPortInfo.get(clientId);
+            if(ownIpPort != null && ownIpPort.size() == 2){
+                byte[] ownIpAddr = ownIpPort.get(0);
+                byte[] ownPortBytes = ownIpPort.get(1);
+                System.arraycopy(ownIpAddr, 0, message, index, 4);
+                index += 4;
+                System.arraycopy(ownPortBytes, 0, message, index, 2);
+                index += 2;
+            }
+            else{
+                IOException e = new IOException("IP/Port info not found for client " + clientId);
+                throw e;
             }
         }
-        catch(Exception e){
+        catch(IOException e){
             e.printStackTrace();
+        }
+        return index;
+    }
+
+    void sendMessageToAllClients(){
+        for(Character clientId : clientChannels.keySet()){
+            SocketChannel clientChannel = clientChannels.get(clientId);
+            List<Edge> edges = AdjacencyList.get(clientId);
+            byte[] message = new byte[256];
+            int index = 0;
+            for(Edge edge : edges){
+                message[index++] = (byte) edge.target.charValue();
+                index = addIpPortToMessage(message, index, edge.target);
+                message[index++] = (byte) edge.weight;
+            }          
+            // add own info at the end
+            message[index++] = (byte) clientId.charValue();
+            index = addIpPortToMessage(message, index, clientId);                
+            message[index++] = (byte) 0; // own cost is 0
+            
+            try{
+                ByteBuffer buffer = ByteBuffer.wrap(message, 0, index);
+                clientChannel.write(buffer);
+                System.err.println("Sent message to client " + clientId + ": " + java.util.Arrays.toString(java.util.Arrays.copyOfRange(message, 0, index)));
+            }
+            catch(IOException e){
+                e.printStackTrace();
+            }
         }
     }
 
-   }
-
-   void printAdjacencyList(){
-    for(Character node : AdjacencyList.keySet()){
+    void printAdjacencyList(){
+     for(Character node : AdjacencyList.keySet()){
         System.out.print(node + ": ");
         for(Edge edge : AdjacencyList.get(node)){
             System.out.print(" -> " + edge.target + "(" + edge.weight + ")");
@@ -114,7 +176,63 @@ public class OracleNode {
     }
    }
 
+   void turnOn(){
+    
+    long lastTime = System.currentTimeMillis();
 
+    while(true){
+        // System.err.println("waiting for new connections...");
+        try{
+            int keys = selector.selectNow();
+           
+            if(keys == 0 && connectedClients == totalClients){
+                // periodically check for config file changes every 30 seconds
+                long currentTime = System.currentTimeMillis();
+                if(FirstTime){
+                    sendMessageToAllClients();
+                    FirstTime = false;
+                }else if(currentTime - lastTime >= 30000){
+                    if(monitorConfigFile()){
+                        sendMessageToAllClients();
+                    }
+                    lastTime = currentTime;
+                }
+            }
+
+            var selectedKeys = selector.selectedKeys();
+            var iter = selectedKeys.iterator();
+            while(iter.hasNext()){
+                SelectionKey key = iter.next();
+
+                if(key.isAcceptable()){
+                    // Handle new connection
+                    SocketChannel clientChannel = serverChannel.accept();
+                    registerClient(clientChannel);
+                }
+                else if(key.isReadable()){
+                    // Handle read
+                    SocketChannel clientChannel = (SocketChannel) key.channel();
+                    ByteBuffer buffer = ByteBuffer.allocate(256);
+                    int bytesRead = clientChannel.read(buffer);
+                    System.err.println("Bytes read: " + bytesRead);
+                    
+                    if(bytesRead > 0){
+                        byte[] receivedMessage = buffer.array();
+                        byte[] ipAddr = new byte[4];
+                        System.arraycopy(receivedMessage, 0, ipAddr, 0, 4);
+                        byte[] portBytes = new byte[2];
+                        System.arraycopy(receivedMessage, 4, portBytes, 0, 2);
+                        ipPortInfo.put(channelToClientId.get(clientChannel),List.of(ipAddr, portBytes));
+                    }
+                }
+                iter.remove();
+            }
+        }
+        catch(IOException e){
+            e.printStackTrace();
+        }
+    }
+   }
 
 };
 
@@ -125,61 +243,12 @@ class Main{
         System.out.print("Enter port number for Oracle Node: ");
         int port = scanner.nextInt();
         OracleNode oracle = new OracleNode(port);
-        oracle.monitorConfigFile();
-        oracle.printAdjacencyList();
-        
+        oracle.turnOn();
+        // oracle.monitorConfigFile();
+        // oracle.printAdjacencyList();
+        scanner.close();
+
         // further implementation to handle client connections and queries
-        
-        while(true){
-            // System.err.println("waiting for new connections...");
-            try{
-                int keys = oracle.selector.selectNow();
-                if(keys == 0){
-                    // check timer and monitor config file
-                    // System.err.println("no keys, checking config file...");
-                    continue;
-                }
-                var selectedKeys = oracle.selector.selectedKeys();
-                var iter = selectedKeys.iterator();
-                while(iter.hasNext()){
-                    SelectionKey key = iter.next();
 
-                    if(key.isAcceptable()){
-                        // Handle new connection
-
-                        SocketChannel clientChannel = oracle.serverChannel.accept();
-                        // if(clientChannel == null){
-                        //     continue;
-                        // }
-                        oracle.registerClient(clientChannel);
-                    }
-                    else if(key.isReadable()){
-                        // Handle read
-                        SocketChannel clientChannel = (SocketChannel) key.channel();
-                        ByteBuffer buffer = ByteBuffer.allocate(256);
-                        int bytesRead = clientChannel.read(buffer);
-                        System.err.println("Bytes read: " + bytesRead);
-                        if(bytesRead == -1){
-                            // Client has closed the connection
-                            clientChannel.close();
-                            key.cancel();
-                            System.err.println("No bytes read");
-                        }
-                        else if(bytesRead > 0){
-                            byte[] receivedMessage = buffer.array();
-                            // send response to client
-                            String message = new String(receivedMessage).trim();
-                            System.err.println("Received message: " + message);
-                            // oracle.sendMessage(clientChannel,message);
-
-                        }
-                    }
-                    iter.remove();
-                }
-            }
-            catch(IOException e){
-                e.printStackTrace();
-            }
-        }
     }
 }
