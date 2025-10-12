@@ -199,8 +199,7 @@ int main(int argc, char* argv[]) {
 
     string DEST_IP = argv[1];
     uint16_t DEST_PORT = stoi(argv[2]);
-    cout<<DEST_IP<<" "<<DEST_PORT<<endl;
-    int n = 3;
+
     vector<pair<string, string>> ip_port_vns = {
         {"10.0.0.1", "8080"},
         {"10.0.0.2", "9090"},
@@ -224,45 +223,25 @@ int main(int argc, char* argv[]) {
     for (const auto& vn : virtualNodes) {
         max_fd = max(max_fd, max(vn.getUdpSockId(), vn.getTcpSockId()));
     }
-    
-    timeval t;
-    struct sockaddr_in dest_addr;
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(DEST_PORT);
-    dest_addr.sin_addr.s_addr = inet_addr(DEST_IP.c_str());
-    memset(&(dest_addr.sin_zero),'\0',8);
 
-    cout<<"Connecting.."<<endl;
-    vector<pair<char,pair<string,string>>>ip_address_mapping;
-    for(int i=0;i<n;i++){
-        cout<<"Hello "<<i<<endl;
-        if(connect(tcp_sock_ids[i],(const sockaddr*)&dest_addr,sizeof(dest_addr)) < 0){
-            cout<<"connection error for socket with id: "<<i<<endl;
-            close(tcp_sock_ids[i]);
-            exit(EXIT_FAILURE);
+    timeval t;
+    while (true) {
+        FD_ZERO(&read_fds);
+        for (const auto& vn : virtualNodes) {
+            FD_SET(vn.getUdpSockId(), &read_fds);
+            FD_SET(vn.getTcpSockId(), &read_fds);
         }
 
-        // char* msg_from_on[BUFF_SIZE];
-        // int received_bytes = recv(tcp_sock_ids[i], msg_from_on, BUFF_SIZE, 0);
-        // if(received_bytes < 0){
-        //     cout<<"connection error for socket with id: "<<i<<endl;
-        //     perror("Error while receiving messages for socket with id");
-        //     close(tcp_sock_ids[i]);
-        //     exit(EXIT_FAILURE);
-        // }   
-        
-        // parse_msg(msg_from_on, ip_address_mapping);
-        // cout<<"msg from oracle node for node with id : " << i << endl;
-        // cout<<msg_from_on<<endl;
-        
-        string msg = ip_port_vns[i].first + " " + ip_port_vns[i].second;
-        const char* msg_to_send = msg.c_str();
-        // msg_to_send = msg.c_str();
-        int sent_bytes = send(tcp_sock_ids[i],msg_to_send,strlen(msg_to_send),0);
-        if(sent_bytes<0){
-            cout<<"sending error for socket with id: "<<i<<endl;
-            close(tcp_sock_ids[i]);
-            exit(EXIT_FAILURE);
+        t.tv_sec = 20;
+        t.tv_usec = 0;
+
+        int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, &t);
+        if (activity < 0) {
+            perror("select error");
+            return EXIT_FAILURE;
+        } else if (activity == 0) {
+            cerr << "Timeout occurred, no activity detected." << endl;
+            continue;
         }
 
         for (auto& vn : virtualNodes) {
@@ -289,5 +268,4 @@ int main(int argc, char* argv[]) {
     }
 
     return 0;
-
 }
