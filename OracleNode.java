@@ -141,22 +141,35 @@ public class OracleNode {
 
     void sendMessageToAllClients(){
         for(Character clientId : clientChannels.keySet()){
+            if(clientId-'A'+1 > totalClients){
+                // not yet registered
+                continue;
+            }
             SocketChannel clientChannel = clientChannels.get(clientId);
             List<Edge> edges = AdjacencyList.get(clientId);
             byte[] message = new byte[256];
             int index = 0;
+    
             for(Edge edge : edges){
                 message[index++] = (byte) edge.target.charValue();
                 index = addIpPortToMessage(message, index, edge.target);
-                message[index++] = (byte) edge.weight;
-            }          
+                byte[] weightBytes = ByteBuffer.allocate(4).putInt(edge.weight).array();
+                for(int k=0; k<4; k++){
+                    message[index++] = weightBytes[k];
+                }
+            }         
+    
+             
             // add own info at the end
             message[index++] = (byte) clientId.charValue();
             index = addIpPortToMessage(message, index, clientId);                
-            message[index++] = (byte) 0; // own cost is 0
+            for(int k=0; k<4; k++){
+                message[index++] = 0; // weight 0 for self
+            }
             
             try{
                 ByteBuffer buffer = ByteBuffer.wrap(message, 0, index);
+                // System.err.println("Sending message to client " + clientId + ": " + java.util.Arrays.toString(java.util.Arrays.copyOfRange(message, 0, index)));
                 clientChannel.write(buffer);
                 System.err.println("Sent message to client " + clientId + ": " + java.util.Arrays.toString(java.util.Arrays.copyOfRange(message, 0, index)));
             }
@@ -185,10 +198,12 @@ public class OracleNode {
         try{
             int keys = selector.selectNow();
            
-            if(keys == 0 && connectedClients == totalClients){
+            if(connectedClients >= totalClients){
+                // System.err.println("All clients connected. Monitoring config file for changes...");
                 // periodically check for config file changes every 30 seconds
                 long currentTime = System.currentTimeMillis();
                 if(FirstTime){
+                    System.err.println("First time sending messages to all clients.");
                     sendMessageToAllClients();
                     FirstTime = false;
                 }else if(currentTime - lastTime >= 30000){
@@ -209,20 +224,40 @@ public class OracleNode {
                     SocketChannel clientChannel = serverChannel.accept();
                     registerClient(clientChannel);
                 }
-                else if(key.isReadable()){
+                if(key.isReadable()){
                     // Handle read
                     SocketChannel clientChannel = (SocketChannel) key.channel();
                     ByteBuffer buffer = ByteBuffer.allocate(256);
                     int bytesRead = clientChannel.read(buffer);
                     System.err.println("Bytes read: " + bytesRead);
-                    
+                    if(bytesRead < 0){
+                        // client has closed the connection
+                        Character clientId = channelToClientId.get(clientChannel);
+                        System.err.println("Client " + clientId + " has disconnected.");
+                        clientChannels.remove(clientId);
+                        channelToClientId.remove(clientChannel);
+                        AdjacencyList.remove(clientId);
+                        ipPortInfo.remove(clientId);
+                        connectedClients--;
+                        key.cancel();
+                        clientChannel.close();
+                    }
+                    else if(bytesRead == 0){
+                        // no data read
+                        System.err.println("No data read from client.");
+                    }
                     if(bytesRead > 0){
                         byte[] receivedMessage = buffer.array();
+                        for(int i=0; i<bytesRead; i++){
+                            System.err.print(String.format("%02X ", receivedMessage[i]));
+                        }
                         byte[] ipAddr = new byte[4];
                         System.arraycopy(receivedMessage, 0, ipAddr, 0, 4);
                         byte[] portBytes = new byte[2];
                         System.arraycopy(receivedMessage, 4, portBytes, 0, 2);
+                        System.err.println("Received IP: " + (ipAddr[0] & 0xFF) + "." + (ipAddr[1] & 0xFF) + "." + (ipAddr[2] & 0xFF) + "." + (ipAddr[3] & 0xFF) + " Port: " + ((portBytes[0] & 0xFF) << 8 | (portBytes[1] & 0xFF)) + " from client " + channelToClientId.get(clientChannel));
                         ipPortInfo.put(channelToClientId.get(clientChannel),List.of(ipAddr, portBytes));
+                        connectedClients++;
                     }
                 }
                 iter.remove();

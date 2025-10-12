@@ -57,10 +57,17 @@ public:
             exit(EXIT_FAILURE);
         }
         // cout<<"HI"<<endl;
-        string msg = to_string(ip_port_vns.first) + " " + to_string(ip_port_vns.second);
-        const char* msg_to_send = msg.c_str();
-        cout<<msg_to_send<<endl;
-        if (send(tcp_sock_id, msg_to_send, strlen(msg_to_send), 0) < 0) {
+        byte msg[6];
+        // first 4 bytes are ip
+        cerr << "ip "<< ip_port_vns.first << " port " << ip_port_vns.second << endl;
+        uint32_t ip = ip_port_vns.first;
+        memcpy(msg, &ip, 4);
+        cerr << (int)(msg[0]) << endl;
+        // next 2 bytes are port
+        uint16_t port = htons(ip_port_vns.second);
+        memcpy(msg + 4, &port, 2);
+
+        if (send(tcp_sock_id, msg,6, 0) < 0) {
             perror("Sending message to oracle failed");
             close(tcp_sock_id);
             exit(EXIT_FAILURE);
@@ -102,7 +109,7 @@ public:
     void handleTcpMessage(fd_set& read_fds) {
         if (FD_ISSET(tcp_sock_id, &read_fds)) {
             byte msg_from_on[BUFF_SIZE];
-            int received_bytes = recv(tcp_sock_id, msg_from_on, BUFF_SIZE, 0);
+            int received_bytes = recv(tcp_sock_id, msg_from_on,BUFF_SIZE, 0);
             if (received_bytes < 0) {
                 perror("Error receiving TCP message");
                 close(tcp_sock_id);
@@ -202,21 +209,29 @@ int main(int argc, char* argv[]) {
     string DEST_IP = "192.168.56.134";
     uint16_t DEST_PORT = 8080;
 
-    vector<pair<string, string>> ip_port_vns = {
-        {"10.0.0.1", "8180"},
-        {"10.0.0.2", "9090"},
-        {"10.0.0.3", "7070"},
-        {"10.0.0.4","3553"},
-        {"12.35.46.4","3532"}
+    // create 26 virtual nodes with their ip and port randomly for testing
+    vector<pair<string,string>> ip_port_vns = {
+            {"192.168.1.10", "8000"}, {"10.0.0.5", "9090"}, {"172.16.4.2", "3000"},
+            {"192.168.0.22", "4500"}, {"10.10.10.10", "1234"}, {"172.20.1.1", "5555"},
+            {"192.168.2.33", "8081"}, {"10.1.1.2", "6000"}, {"172.18.5.9", "7000"},
+            {"192.168.100.4", "4040"}, {"10.2.3.4", "5050"}, {"172.19.8.8", "2020"},
+            {"192.168.5.15", "8082"}, {"10.3.3.3", "9091"}, {"172.17.0.7", "6060"},
+            {"192.168.10.11", "7070"}, {"10.4.4.4", "8085"}, {"172.16.1.9", "9095"},
+            {"192.168.3.30", "3030"}, {"10.5.5.5", "5055"}, {"172.21.2.6", "6065"},
+            {"192.168.8.12", "8088"}, {"10.6.6.6", "9099"}, {"172.22.3.3", "7077"},
+            {"192.168.4.44", "4044"}, {"10.7.7.7", "5059"}
+        
     };
 
-    vector<VirtualNode*> virtualNodes(26);
+    vector<VirtualNode*> virtualNodes(26,nullptr);
     for (int i = 0; i < ip_port_vns.size(); ++i) {
         uint32_t ip = inet_addr(ip_port_vns[i].first.c_str());
         uint16_t port = stoi(ip_port_vns[i].second); 
         pair<uint32_t,uint16_t> p = {ip,port};
         VirtualNode *vn1 = new VirtualNode(i,p);
         virtualNodes[i]=vn1;
+        cerr << "Created Virtual Node " << char('A' + i) << " with IP " 
+             << ip_port_vns[i].first << " and Port " << ip_port_vns[i].second << endl;
     }
 
     for (auto& vn : virtualNodes) {
