@@ -16,7 +16,7 @@ using namespace std;
 
 
 class VirtualNode {
-private:
+public:
     int id;
     int udp_sock_id;
     int tcp_sock_id;
@@ -25,10 +25,11 @@ private:
     pair<uint32_t, uint16_t> ip_port_vns;
 
 public:
-    VirtualNode(int id, const pair<uint32_t, uint16_t>& ip_port_vns)
+    VirtualNode(int id, pair<uint32_t, uint16_t>& ip_port_vns)
         : id(id), ip_port_vns(ip_port_vns) {
         udp_sock_id = socket(PF_INET, SOCK_DGRAM, 0);
         tcp_sock_id = socket(PF_INET, SOCK_STREAM, 0);
+        cout<<id<<" tcp "<<tcp_sock_id<<" udp "<<udp_sock_id<<endl;
         if (udp_sock_id < 0 || tcp_sock_id < 0) {
             perror("Socket creation failed");
             exit(EXIT_FAILURE);
@@ -49,15 +50,16 @@ public:
         dest_addr.sin_port = htons(dest_port);
         dest_addr.sin_addr.s_addr = inet_addr(dest_ip.c_str());
         memset(&(dest_addr.sin_zero), '\0', 8);
-
-        if (connect(tcp_sock_id, (const sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
-            perror("Connection to oracle failed");
+        // cout<<tcp_sock_id<<endl;
+        if (connect(tcp_sock_id, (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
+            perror("Connection to oracle failed hi");
             close(tcp_sock_id);
             exit(EXIT_FAILURE);
         }
-
-        string msg = ip_port_vns.first + " " + ip_port_vns.second;
+        // cout<<"HI"<<endl;
+        string msg = to_string(ip_port_vns.first) + " " + to_string(ip_port_vns.second);
         const char* msg_to_send = msg.c_str();
+        cout<<msg_to_send<<endl;
         if (send(tcp_sock_id, msg_to_send, strlen(msg_to_send), 0) < 0) {
             perror("Sending message to oracle failed");
             close(tcp_sock_id);
@@ -192,44 +194,47 @@ public:
     }
 };
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        cerr << "Usage: " << argv[0] << " <DEST_IP> <DEST_PORT>" << endl;
-        return EXIT_FAILURE;
-    }
+    // if (argc != 3) {
+    //     cerr << "Usage: " << argv[0] << " <DEST_IP> <DEST_PORT>" << endl;
+    //     return EXIT_FAILURE;
+    // }
 
-    string DEST_IP = argv[1];
-    uint16_t DEST_PORT = stoi(argv[2]);
+    string DEST_IP = "192.168.56.134";
+    uint16_t DEST_PORT = 8080;
 
     vector<pair<string, string>> ip_port_vns = {
-        {"10.0.0.1", "8080"},
+        {"10.0.0.1", "8180"},
         {"10.0.0.2", "9090"},
-        {"10.0.0.3", "7070"}
+        {"10.0.0.3", "7070"},
+        {"10.0.0.4","3553"},
+        {"12.35.46.4","3532"}
     };
 
-    vector<VirtualNode> virtualNodes;
+    vector<VirtualNode*> virtualNodes(26);
     for (int i = 0; i < ip_port_vns.size(); ++i) {
         uint32_t ip = inet_addr(ip_port_vns[i].first.c_str());
         uint16_t port = stoi(ip_port_vns[i].second); 
         pair<uint32_t,uint16_t> p = {ip,port};
-        virtualNodes.emplace_back(i, p);
+        VirtualNode *vn1 = new VirtualNode(i,p);
+        virtualNodes[i]=vn1;
     }
 
     for (auto& vn : virtualNodes) {
-        vn.connectToOracle(DEST_IP, DEST_PORT);
+        vn->connectToOracle(DEST_IP, DEST_PORT);
     }
 
     fd_set read_fds;
     int max_fd = 0;
     for (const auto& vn : virtualNodes) {
-        max_fd = max(max_fd, max(vn.getUdpSockId(), vn.getTcpSockId()));
+        max_fd = max(max_fd, max(vn->getUdpSockId(), vn->getTcpSockId()));
     }
 
     timeval t;
     while (true) {
         FD_ZERO(&read_fds);
         for (const auto& vn : virtualNodes) {
-            FD_SET(vn.getUdpSockId(), &read_fds);
-            FD_SET(vn.getTcpSockId(), &read_fds);
+            FD_SET(vn->getUdpSockId(), &read_fds);
+            FD_SET(vn->getTcpSockId(), &read_fds);
         }
 
         t.tv_sec = 20;
@@ -245,7 +250,7 @@ int main(int argc, char* argv[]) {
         }
 
         for (auto& vn : virtualNodes) {
-            vn.handleTcpMessage(read_fds);
+            vn->handleTcpMessage(read_fds);
             // vn.handleUdpMessage(read_fds);
         }
 
