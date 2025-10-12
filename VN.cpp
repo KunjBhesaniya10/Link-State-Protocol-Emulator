@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <vector>
+#include <map>
 using namespace std;
 #define BUFF_SIZE 4096
 // #define DEST_IP "10.17.44.176"
@@ -228,7 +229,7 @@ int main(int argc, char* argv[]) {
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(DEST_PORT);
-    dest_addr.sin_addr.s_addr = inet_addr((char*)DEST_IP);
+    dest_addr.sin_addr.s_addr = inet_addr(DEST_IP.c_str());
     memset(&(dest_addr.sin_zero),'\0',8);
 
     cout<<"Connecting.."<<endl;
