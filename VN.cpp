@@ -14,17 +14,18 @@ using namespace std;
 // #define DEST_IP "10.17.44.176"
 // #define DEST_PORT 5000
 
-map<int, pair<string, string>> ip_address_mapping; //make it global
+
 class VirtualNode {
 private:
     int id;
     int udp_sock_id;
     int tcp_sock_id;
     map<int, vector<pair<int, int>>> adj_list;
-    pair<string, string> ip_port_vns;
+    map<int, pair<uint32_t, uint16_t>> ip_port_mapping;
+    pair<uint32_t, uint16_t> ip_port_vns;
 
 public:
-    VirtualNode(int id, const pair<string, string>& ip_port_vns)
+    VirtualNode(int id, const pair<uint32_t, uint16_t>& ip_port_vns)
         : id(id), ip_port_vns(ip_port_vns) {
         udp_sock_id = socket(PF_INET, SOCK_DGRAM, 0);
         tcp_sock_id = socket(PF_INET, SOCK_STREAM, 0);
@@ -64,86 +65,119 @@ public:
         }
     }
 
-    void handleUdpMessage(fd_set& read_fds) {
-        if (FD_ISSET(udp_sock_id, &read_fds)) {
-            char msg_from_neigh[BUFF_SIZE];
-            int received_bytes = recv(udp_sock_id, msg_from_neigh, BUFF_SIZE, 0);
-            if (received_bytes < 0) {
-                perror("Error receiving UDP message");
-                close(udp_sock_id);
-                exit(EXIT_FAILURE);
-            }
-            parse_msg_neigh(msg_from_neigh, ip_address_mapping, adj_list);
+    // void handleUdpMessage(fd_set& read_fds) {
+    //     if (FD_ISSET(udp_sock_id, &read_fds)) {
+    //         char msg_from_neigh[BUFF_SIZE];
+    //         int received_bytes = recv(udp_sock_id, msg_from_neigh, BUFF_SIZE, 0);
+    //         if (received_bytes < 0) {
+    //             perror("Error receiving UDP message");parse_msg_on(msg_from_on, ip_port_mapping, adj_list)
+    //             close(udp_sock_id);
+    //             exit(EXIT_FAILURE);
+    //         }
+    //         parse_msg_neigh(msg_from_neigh, ip_port_mapping, adj_list);
 
-            for (auto& neigh : adj_list[id]) {
-                int neigh_id = neigh.first;
-                if (neigh_id != msg_from_neigh[0] - 'A') {
-                    string info_msg = string(msg_from_neigh, received_bytes);
-                    const char* info_msg_to_send = info_msg.c_str();
-                    struct sockaddr_in dest_addr_vn;
-                    dest_addr_vn.sin_family = AF_INET;
-                    dest_addr_vn.sin_port = htons(stoi(ip_address_mapping[neigh_id].second));
-                    dest_addr_vn.sin_addr.s_addr = inet_addr(ip_address_mapping[neigh_id].first.c_str());
-                    memset(&(dest_addr_vn.sin_zero), '\0', 8);
-                    if (sendto(udp_sock_id, info_msg_to_send, strlen(info_msg_to_send), 0,
-                               (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
-                        perror("Error sending UDP message");
-                        close(udp_sock_id);
-                        exit(EXIT_FAILURE);
-                    }
-                }
-            }
-        }
-    }
+    //         for (auto& neigh : adj_list[id]) {
+    //             int neigh_id = neigh.first;
+    //             if (neigh_id != msg_from_neigh[0] - 'A') {
+    //                 string info_msg = string(msg_from_neigh, received_bytes);
+    //                 const char* info_msg_to_send = info_msg.c_str();
+    //                 struct sockaddr_in dest_addr_vn;
+    //                 dest_addr_vn.sin_family = AF_INET;
+    //                 dest_addr_vn.sin_port = htons(stoi(ip_port_mapping[neigh_id].second));
+    //                 dest_addr_vn.sin_addr.s_addr = inet_addr(ip_port_mapping[neigh_id].first.c_str());
+    //                 memset(&(dest_addr_vn.sin_zero), '\0', 8);
+    //                 if (sendto(udp_sock_id, info_msg_to_send, strlen(info_msg_to_send), 0,
+    //                            (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
+    //                     perror("Error sending UDP message");
+    //                     close(udp_sock_id);
+    //                     exit(EXIT_FAILURE);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     void handleTcpMessage(fd_set& read_fds) {
         if (FD_ISSET(tcp_sock_id, &read_fds)) {
-            char msg_from_on[BUFF_SIZE];
+            byte msg_from_on[BUFF_SIZE];
             int received_bytes = recv(tcp_sock_id, msg_from_on, BUFF_SIZE, 0);
             if (received_bytes < 0) {
                 perror("Error receiving TCP message");
                 close(tcp_sock_id);
                 exit(EXIT_FAILURE);
             }
-            parse_msg_on(msg_from_on, ip_address_mapping, adj_list);
+            parse_msg_on(msg_from_on);
 
-            for (auto& neigh : adj_list[id]) {
-                int neigh_id = neigh.first;
-                string info_msg = string(msg_from_on, received_bytes);
-                const char* info_msg_to_send = info_msg.c_str();
-                struct sockaddr_in dest_addr_vn;
-                dest_addr_vn.sin_family = AF_INET;
-                dest_addr_vn.sin_port = htons(stoi(ip_address_mapping[neigh_id].second));
-                dest_addr_vn.sin_addr.s_addr = inet_addr(ip_address_mapping[neigh_id].first.c_str());
-                memset(&(dest_addr_vn.sin_zero), '\0', 8);
-                if (sendto(udp_sock_id, info_msg_to_send, strlen(info_msg_to_send), 0,
-                           (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
-                    perror("Error sending TCP message");
-                    close(udp_sock_id);
-                    exit(EXIT_FAILURE);
-                }
-            }
+            // for (auto& neigh : adj_list[id]) {
+            //     int neigh_id = neigh.first;
+            //     string info_msg = string(msg_from_on, received_bytes);
+            //     const char* info_msg_to_send = info_msg.c_str();
+            //     struct sockaddr_in dest_addr_vn;
+            //     dest_addr_vn.sin_family = AF_INET;
+            //     dest_addr_vn.sin_port = htons(stoi(ip_port_mapping[neigh_id].second));
+            //     dest_addr_vn.sin_addr.s_addr = inet_addr(ip_port_mapping[neigh_id].first.c_str());
+            //     memset(&(dest_addr_vn.sin_zero), '\0', 8);
+            //     if (sendto(udp_sock_id, info_msg_to_send, strlen(info_msg_to_send), 0,
+            //                (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
+            //         perror("Error sending TCP message");
+            //         close(udp_sock_id);
+            //         exit(EXIT_FAILURE);
+            //     }
+            // }
         }
     }
 
-    void sendPeriodicLSP() {
-        string lsp_msg = create_lsp_msg(id, ip_address_mapping, adj_list);
-        const char* lsp_msg_to_send = lsp_msg.c_str();
-        for (auto& neigh : adj_list[id]) {
-            int neigh_id = neigh.first;
-            struct sockaddr_in dest_addr_vn;
-            dest_addr_vn.sin_family = AF_INET;
-            dest_addr_vn.sin_port = htons(stoi(ip_address_mapping[neigh_id].second));
-            dest_addr_vn.sin_addr.s_addr = inet_addr(ip_address_mapping[neigh_id].first.c_str());
-            memset(&(dest_addr_vn.sin_zero), '\0', 8);
-            if (sendto(udp_sock_id, lsp_msg_to_send, strlen(lsp_msg_to_send), 0,
-                       (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
-                perror("Error sending LSP message");
-                close(udp_sock_id);
-                exit(EXIT_FAILURE);
+    // void sendPeriodicLSP() {
+    //     string lsp_msg = create_lsp_msg(id, ip_port_mapping, adj_list);
+    //     const char* lsp_msg_to_send = lsp_msg.c_str();
+    //     for (auto& neigh : adj_list[id]) {
+    //         int neigh_id = neigh.first;
+    //         struct sockaddr_in dest_addr_vn;
+    //         dest_addr_vn.sin_family = AF_INET;
+    //         dest_addr_vn.sin_port = htons(stoi(ip_port_mapping[neigh_id].second));
+    //         dest_addr_vn.sin_addr.s_addr = inet_addr(ip_port_mapping[neigh_id].first.c_str());
+    //         memset(&(dest_addr_vn.sin_zero), '\0', 8);
+    //         if (sendto(udp_sock_id, lsp_msg_to_send, strlen(lsp_msg_to_send), 0,
+    //                    (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
+    //             perror("Error sending LSP message");
+    //             close(udp_sock_id);
+    //             exit(EXIT_FAILURE);
+    //         }
+    //     }
+    // }
+    void parse_msg_on(byte msg_from_on[]){
+        int index = 0;
+        while(index < BUFF_SIZE){
+            int node_id = ((char)msg_from_on[index]) - 'A';
+            index++;
+            // next 4 bytes are ip
+            uint32_t ip = 0;
+            for(int i=0;i<4;i++){
+                ip = (ip << 8) | (unsigned char)msg_from_on[index+i];
             }
+            index+=4;
+            // next 2 bytes are port
+            uint16_t port = ((unsigned char)msg_from_on[index] << 8) | (unsigned char)msg_from_on[index+1];
+            index+=2;
+            // next 4 bytes is cost
+            int cost = 0;
+            for(int i=0;i<4;i++){
+                cost = (cost << 8) | (unsigned char)msg_from_on[index+i];
+            }
+            index+=4;
+            if(cost == 0){
+                this->id = node_id;
+                break;
+            }
+            cerr << "Virtual Node " << char('A' + this->id) << " received from Oracle: Node " 
+                 << char('A' + node_id) << ", IP " << ((ip >> 24) & 0xFF) << "." 
+                 << ((ip >> 16) & 0xFF) << "." << ((ip >> 8) & 0xFF) << "." 
+                 << (ip & 0xFF) << ", Port " << port << ", Cost " << cost << endl;
+            ip_port_mapping[node_id] = {ip, port};
+            adj_list[node_id].push_back({node_id, cost});
         }
     }
+    
 
     void displayAdjList() const {
         cout << "Adjacency list for virtual node " << char('A' + id) << ":" << endl;
@@ -174,7 +208,10 @@ int main(int argc, char* argv[]) {
 
     vector<VirtualNode> virtualNodes;
     for (int i = 0; i < ip_port_vns.size(); ++i) {
-        virtualNodes.emplace_back(i, ip_port_vns);
+        uint32_t ip = inet_addr(ip_port_vns[i].first.c_str());
+        uint16_t port = stoi(ip_port_vns[i].second); 
+        pair<uint32_t,uint16_t> p = {ip,port};
+        virtualNodes.emplace_back(i, p);
     }
 
     for (auto& vn : virtualNodes) {
@@ -209,25 +246,25 @@ int main(int argc, char* argv[]) {
 
         for (auto& vn : virtualNodes) {
             vn.handleTcpMessage(read_fds);
-            vn.handleUdpMessage(read_fds);
+            // vn.handleUdpMessage(read_fds);
         }
 
         // Periodically send LSP messages
-        static time_t last_lsp_time = time(nullptr);
-        time_t current_time = time(nullptr);
+        // static time_t last_lsp_time = time(nullptr);
+        // time_t current_time = time(nullptr);
 
-        if (difftime(current_time, last_lsp_time) >= 15) {
-            for (auto& vn : virtualNodes) {
-                vn.sendPeriodicLSP();
-            }
+        // if (difftime(current_time, last_lsp_time) >= 15) {
+        //     for (auto& vn : virtualNodes) {
+        //         vn.sendPeriodicLSP();
+        //     }
 
-            // Display the state of the adjacency list for each virtual node
-            for (const auto& vn : virtualNodes) {
-                vn.displayAdjList();
-            }
+        //     // Display the state of the adjacency list for each virtual node
+        //     for (const auto& vn : virtualNodes) {
+        //         vn.displayAdjList();
+        //     }
 
-            last_lsp_time = current_time;
-        }
+        //     last_lsp_time = current_time;
+        // }
     }
 
     return 0;
