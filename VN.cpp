@@ -8,12 +8,18 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <vector>
+#include <map>
 using namespace std;
 #define BUFF_SIZE 4096
 // #define DEST_IP "10.17.44.176"
 // #define DEST_PORT 5000
 
 int main(int argc, char* argv[]){
+
+    //DATA-STRUCTURES
+    map<int, pair<string,string>>ip_address_mapping; // 0 - A, 1 - B and so on
+    vector<map<int, vector<pair<int,int>>>>adj_list(26); //of adjacency list for each node mapping type
+
 
     char* DEST_IP = argv[1];
     uint16_t DEST_PORT = stoi(argv[2]);
@@ -24,9 +30,7 @@ int main(int argc, char* argv[]){
         {"10.0.0.2", "9090"},
         {"10.0.0.3", "7070"}
     };
-    // for(int i=0;i<n;i++){
-    //     cin>>ip_port_vns[i].first>>ip_port_vns[i].second;
-    // }
+    
     int max_fd;
     vector<int>udp_sock_ids(n),tcp_sock_ids(n); //0->A,1->B and so on
     for(int i=0;i<n;i++){
@@ -45,7 +49,7 @@ int main(int argc, char* argv[]){
     memset(&(dest_addr.sin_zero),'\0',8);
 
     cout<<"Connecting.."<<endl;
-    vector<pair<char,pair<string,string>>>ip_address_mapping;
+    
     for(int i=0;i<n;i++){
         cout<<"Hello "<<i<<endl;
         if(connect(tcp_sock_ids[i],(const sockaddr*)&dest_addr,sizeof(dest_addr)) < 0){
@@ -77,47 +81,79 @@ int main(int argc, char* argv[]){
             exit(EXIT_FAILURE);
         }
     }
-    // cout<<"Yeey"<<endl;
-    // fd_set read_fds;
-    // while(1){
-    //     FD_ZERO(&read_fds);
-    //     for(int i=0;i<26;i++){
-    //         FD_SET(udp_sock_ids[i],&read_fds);
-    //         FD_SET(tcp_sock_ids[i],&read_fds);
-    //     }
-    //     t.tv_sec = 20;
-    //     int activity =  select(max_fd+1, &read_fds, NULL, NULL, &t);
-    //     if(activity < 0){
-    //         perror("select error");
-    //         for(int i=0;i<26;i++){
-    //             close(udp_sock_ids[i]);
-    //             close(tcp_sock_ids[i]);
-    //         }
-    //         exit(1);
-    //     }
-    //     else if (activity == 0){
-    //         perror("No activity so timeout");
-    //         for(int i=0;i<26;i++){
-    //             close(udp_sock_ids[i]);
-    //             close(tcp_sock_ids[i]);
-    //         }
-    //         exit(1);
-    //     }
-    //     else{
-    //         for(int i=0;i<26;i++){
-    //             if(FD_ISSET(udp_sock_ids[i], &read_fds)){
-    //                 cout<<"Message available from neighbours for node: "+(i+'A')<<endl;
-    //             }
-    //             if(FD_ISSET(tcp_sock_ids[i], &read_fds)){
-    //                 cout<<"Message available from oracle node for node: "+(i+'A')<<endl;
+    cout<<"Yeey"<<endl;
+    fd_set read_fds;
+    while(1){
+        FD_ZERO(&read_fds);
+        for(int i=0;i<26;i++){
+            FD_SET(udp_sock_ids[i],&read_fds);
+            FD_SET(tcp_sock_ids[i],&read_fds);
+        }
+        cout<<"Entered loop"<<endl;
+        t.tv_sec = 20;
+        int activity =  select(max_fd+1, &read_fds, NULL, NULL, &t);
+        if(activity < 0){
+            perror("select error");
+            for(int i=0;i<26;i++){
+                close(udp_sock_ids[i]);
+                close(tcp_sock_ids[i]);
+            }
+            exit(1);
+        }
+        else if (activity == 0){
+            perror("No activity so timeout");
+            for(int i=0;i<26;i++){
+                close(udp_sock_ids[i]);
+                close(tcp_sock_ids[i]);
+            }
+            exit(1);
+        }
+        else{
+            for(int i=0;i<26;i++){
+                if(FD_ISSET(udp_sock_ids[i], &read_fds)){
+                    cout<<"Message available from neighbours for node: "+(i+'A')<<endl;
+                    char msg_from_neigh[BUFF_SIZE];
+                    //storing it in ip_address_mapping
+                    int received_bytes = recv(udp_sock_ids[i], msg_from_neigh, BUFF_SIZE, 0);
+                    if(received_bytes < 0){
+                        cout<<"[Line 117] connection error for socket with id: "<<i<<endl;
+                        perror("Error while receiving messages for socket with id");
+                        close(udp_sock_ids[i]);
+                        exit(EXIT_FAILURE);
+                    }
+                    parse_msg_neigh(msg_from_neigh, ip_address_mapping, adj_list[i]);
+                }
+                if(FD_ISSET(tcp_sock_ids[i], &read_fds)){
+                    cout<<"Message available from oracle node for node: "+(i+'A')<<endl;
+                    //storing it in ip_address_mapping
 
-    //                 //TO-DO
-    //                 //send this info to neighbors
-    //             }
-    //         }
-    //     }
-    //     //periodically send LSP msgs to neighbors
-    // }
+                    char msg_from_on[BUFF_SIZE];
+                    int received_bytes = recv(tcp_sock_ids[i], msg_from_on, BUFF_SIZE, 0);
+                    if(received_bytes < 0){
+                        cout<<"[Line 119] connection error for socket with id: "<<i<<endl;
+                        perror("Error while receiving messages for socket with id");
+                        close(tcp_sock_ids[i]);
+                        exit(EXIT_FAILURE);
+                    }
+                    parse_msg_on(msg_from_on, ip_address_mapping, adj_list[i]);
+                }
+            }
+        }
+        //periodically send LSP msgs to neighbors
+        for(int i=0;i<26;i++){
+            string lsp_msg = create_lsp_msg(i, ip_address_mapping, adj_list[i]);
+            const char* lsp_msg_to_send = lsp_msg.c_str();
+            for(auto neigh: adj_list[i][i]){
+                int neigh_id = neigh.first;
+                int sent_bytes = sendto(udp_sock_ids[i], lsp_msg_to_send, strlen(lsp_msg_to_send), 0, (const sockaddr*)&(ip_address_mapping[neigh_id]), sizeof(ip_address_mapping[neigh_id]));
+                if(sent_bytes < 0){
+                    cout<<"[Line 142] sending error for socket with id: "<<i<<endl;
+                    close(udp_sock_ids[i]);
+                    exit(EXIT_FAILURE);
+                }
+            }
+        }
+    }
 
     for(int i=0;i<n;i++){
         close(udp_sock_ids[i]);
