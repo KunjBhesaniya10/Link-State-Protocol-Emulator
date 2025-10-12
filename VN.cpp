@@ -14,17 +14,17 @@ using namespace std;
 // #define DEST_IP "10.17.44.176"
 // #define DEST_PORT 5000
 
+map<int, pair<string, string>> ip_address_mapping; //make it global
 class VirtualNode {
 private:
     int id;
     int udp_sock_id;
     int tcp_sock_id;
-    map<int, pair<string, string>> ip_address_mapping;
     map<int, vector<pair<int, int>>> adj_list;
-    vector<pair<string, string>> ip_port_vns;
+    pair<string, string> ip_port_vns;
 
 public:
-    VirtualNode(int id, const vector<pair<string, string>>& ip_port_vns)
+    VirtualNode(int id, const pair<string, string>& ip_port_vns)
         : id(id), ip_port_vns(ip_port_vns) {
         udp_sock_id = socket(PF_INET, SOCK_DGRAM, 0);
         tcp_sock_id = socket(PF_INET, SOCK_STREAM, 0);
@@ -55,7 +55,7 @@ public:
             exit(EXIT_FAILURE);
         }
 
-        string msg = ip_port_vns[id].first + " " + ip_port_vns[id].second;
+        string msg = ip_port_vns.first + " " + ip_port_vns.second;
         const char* msg_to_send = msg.c_str();
         if (send(tcp_sock_id, msg_to_send, strlen(msg_to_send), 0) < 0) {
             perror("Sending message to oracle failed");
@@ -208,8 +208,8 @@ int main(int argc, char* argv[]) {
         }
 
         for (auto& vn : virtualNodes) {
-            vn.handleUdpMessage(read_fds);
             vn.handleTcpMessage(read_fds);
+            vn.handleUdpMessage(read_fds);
         }
 
         // Periodically send LSP messages
