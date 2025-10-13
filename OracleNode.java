@@ -37,6 +37,7 @@ public class OracleNode {
         ipPortInfo = new HashMap<>();
         connectedClients = 0;
         monitorConfigFile();
+        printAdjacencyList();
         totalClients = AdjacencyList.size();
         try{
             this.selector = Selector.open();
@@ -75,7 +76,8 @@ public class OracleNode {
     Boolean monitorConfigFile(){
     // monitor the config file for changes and update the adjacency list
         File file = new File(configFile);
-        if(file.lastModified() > lastModified){  
+        if(file.lastModified() > lastModified){ 
+            lastModified = file.lastModified(); 
             try(BufferedReader br = new BufferedReader(new FileReader(file))){
                 String line;
                 Character node = 'A';
@@ -142,7 +144,6 @@ public class OracleNode {
     void sendMessageToAllClients(){
         for(Character clientId : clientChannels.keySet()){
             if(clientId-'A'+1 > totalClients){
-                // not yet registered
                 continue;
             }
             SocketChannel clientChannel = clientChannels.get(clientId);
@@ -169,7 +170,6 @@ public class OracleNode {
             
             try{
                 ByteBuffer buffer = ByteBuffer.wrap(message, 0, index);
-                // System.err.println("Sending message to client " + clientId + ": " + java.util.Arrays.toString(java.util.Arrays.copyOfRange(message, 0, index)));
                 clientChannel.write(buffer);
                 System.err.println("Sent message to client " + clientId + ": " + java.util.Arrays.toString(java.util.Arrays.copyOfRange(message, 0, index)));
             }
