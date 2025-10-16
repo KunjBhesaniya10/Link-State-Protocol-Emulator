@@ -272,6 +272,7 @@ public class OracleNode {
                         AdjacencyList.remove(clientId);
                         ipPortInfo.remove(clientId);
                         connectedClients--;
+                        totalClients--;
                         key.cancel();
                         clientChannel.close();
                     }
