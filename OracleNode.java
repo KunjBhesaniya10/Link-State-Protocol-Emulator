@@ -31,8 +31,8 @@ public class OracleNode {
 
    private static volatile boolean running = true;  
 
-   OracleNode(int port){
-        this.port = port;
+   OracleNode(String ip, String configFile){
+        this.port = 5000;
         clientChannels = new HashMap<>();
         channelToClientId = new HashMap<>();
         AdjacencyList = new HashMap<>();
@@ -42,9 +42,10 @@ public class OracleNode {
         printAdjacencyList();
         totalClients = AdjacencyList.size();
         try{
+            InetAddress addr = InetAddress.getByName(ip);
             this.selector = Selector.open();
             this.serverChannel = ServerSocketChannel.open();
-            this.serverChannel.bind(new InetSocketAddress(port));
+            this.serverChannel.bind(new InetSocketAddress(addr,port));
             this.serverChannel.configureBlocking(false);
             this.serverChannel.register(selector, SelectionKey.OP_ACCEPT);
             this.serverSocket = serverChannel.socket();
@@ -81,13 +82,6 @@ public class OracleNode {
         e.printStackTrace();
     }
    }
-    // void sendMessage(SocketChannel clientChannel, String receivedMessage){
-    //  try{
-    //     // send list of [Node,ip,port,cost] (of neighbors) to client
-    //     // receivedMessage has ip and port of client. (32 bits and 16 bits)
-
-    //  }
-    // }
 
     Boolean monitorConfigFile(){
     // monitor the config file for changes and update the adjacency list
@@ -128,13 +122,13 @@ public class OracleNode {
                     }
                     node = (char)(node.charValue() + 1);
                 }
-                
+            
+                totalClients = AdjacencyList.size();
                 
             }
             catch(Exception e){
                 e.printStackTrace();
             }
-            int nodeCount = 0;
 
         }
         return false;
@@ -298,9 +292,6 @@ public class OracleNode {
             e.printStackTrace();
         }
     }
-
-    cleanup();
-    System.out.println("Oracle Node shut down gracefully.");
    }
 
 };
@@ -308,16 +299,19 @@ public class OracleNode {
 class Main{
     public static void main(String[] args) {
         
+        // command line argument for configFile
+        String configFile ="";
+        if(args.length==1){
+            configFile = args[0];
+        }else{
+            System.out.println("Usage: java OracleNode <configFile>");
+        }
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Enter port number for Oracle Node: ");
-        int port = scanner.nextInt();
-        OracleNode oracle = new OracleNode(port);
+        System.out.print("Enter the IP address for the Oracle Node: ");
+        String ip;
+        ip = scanner.nextLine().trim();
+        OracleNode oracle = new OracleNode(ip, configFile);
         oracle.turnOn();
-        // oracle.monitorConfigFile();
-        // oracle.printAdjacencyList();
         scanner.close();
-
-        // further implementation to handle client connections and queries
-
     }
 }
