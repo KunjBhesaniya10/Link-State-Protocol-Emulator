@@ -29,6 +29,8 @@ public class OracleNode {
    int totalClients;
    Boolean FirstTime = true;
 
+   private static volatile boolean running = true;  
+
    OracleNode(int port){
         this.port = port;
         clientChannels = new HashMap<>();
@@ -52,6 +54,20 @@ public class OracleNode {
         }
     }
    
+   void cleanup(){
+    // close all channels and selector
+    try{
+        for(SocketChannel clientChannel : clientChannels.values()){
+            clientChannel.close();
+        }
+        serverChannel.close();
+        selector.close();
+    }
+    catch(IOException e){
+        e.printStackTrace();
+    }
+   }
+
    void registerClient(SocketChannel clientChannel){
     try{
         clientChannel.configureBlocking(false);
@@ -77,7 +93,8 @@ public class OracleNode {
     // monitor the config file for changes and update the adjacency list
         File file = new File(configFile);
         if(file.lastModified() > lastModified){ 
-            lastModified = file.lastModified(); 
+            lastModified = file.lastModified();             
+            
             try(BufferedReader br = new BufferedReader(new FileReader(file))){
                 String line;
                 Character node = 'A';
@@ -87,12 +104,15 @@ public class OracleNode {
                         continue; // skip empty lines and comments
                     }
                     String[] parts = line.split("\\s+");
-                    // System.err.println(parts.length + " parts found in line: " + line);
                     int j=0;
                     while(j < parts.length && parts[j].isEmpty()){
                         j++;
                     }
-                    AdjacencyList.put(node, new java.util.ArrayList<>());
+                    if(node == 'A'){
+                        for(char c = 'A'; c < (char)('A' + parts.length+1-j); c++){
+                            AdjacencyList.put(c, new java.util.ArrayList<>());
+                        }
+                    }
                     char tmp = (char)(node.charValue() + 1);
                     while(j < parts.length){
                         // System.err.println("Adding edge from " + node + " to " + tmp + " with weight " + parts[j]);
@@ -102,19 +122,20 @@ public class OracleNode {
                             continue;
                         }
                         AdjacencyList.get(node).add(new Edge(Character.valueOf(tmp), Integer.parseInt(parts[j])));
-                        AdjacencyList.putIfAbsent(tmp, new java.util.ArrayList<>());
                         AdjacencyList.get(tmp).add(new Edge(Character.valueOf(node), Integer.parseInt(parts[j])));
                         j++;
                         tmp++;
                     }
                     node = (char)(node.charValue() + 1);
                 }
+                
+                
             }
             catch(Exception e){
                 e.printStackTrace();
             }
+            int nodeCount = 0;
 
-            return true;
         }
         return false;
     }
@@ -191,9 +212,19 @@ public class OracleNode {
 
    void turnOn(){
     
+    Runtime.getRuntime().addShutdownHook(
+        new Thread(() -> {
+            System.out.println("Shutting down Oracle Node...");
+            running = false;
+            cleanup();
+            System.out.println("Oracle Node shut down gracefully.");
+        }
+    ));
+
+
     long lastTime = System.currentTimeMillis();
 
-    while(true){
+    while(running){
         // System.err.println("waiting for new connections...");
         try{
             int keys = selector.selectNow();
@@ -267,6 +298,9 @@ public class OracleNode {
             e.printStackTrace();
         }
     }
+
+    cleanup();
+    System.out.println("Oracle Node shut down gracefully.");
    }
 
 };

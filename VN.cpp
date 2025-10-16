@@ -28,8 +28,7 @@ public:
     pair<uint32_t, uint16_t> ip_port_vns;
 
 public:
-    VirtualNode(int id, pair<uint32_t, uint16_t>& ip_port_vns)
-        : id(id), ip_port_vns(ip_port_vns) {
+    VirtualNode(uint32_t ip){
         udp_sock_id = socket(PF_INET, SOCK_DGRAM, 0);
         tcp_sock_id = socket(PF_INET, SOCK_STREAM, 0);
         cout<<id<<" tcp "<<tcp_sock_id<<" udp "<<udp_sock_id<<endl;
@@ -37,6 +36,28 @@ public:
             perror("Socket creation failed");
             exit(EXIT_FAILURE);
         }
+        // Bind UDP socket
+        struct sockaddr_in local_addr;
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_port = 0; // Let OS assign an ep remandom port
+        local_addr.sin_addr.s_addr = ip; // Listen on all available network interfaces
+        
+        memset(&(local_addr.sin_zero), '\0', 8);
+        if (bind(udp_sock_id, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
+            perror("UDP bind failed");
+            close(udp_sock_id);
+            exit(EXIT_FAILURE);
+        }
+        // Get the assigned port number
+        struct sockaddr_in tmp_addr;
+        socklen_t addr_len = sizeof(tmp_addr);
+        if (getsockname(udp_sock_id, (struct sockaddr*)&tmp_addr, &addr_len) < 0) {
+            perror("getsockname failed");
+            close(udp_sock_id);
+            exit(EXIT_FAILURE);
+        }
+        ip_port_vns = {ip, ntohs(tmp_addr.sin_port)};
+        
     }
 
     ~VirtualNode() {
@@ -47,7 +68,7 @@ public:
     int getUdpSockId() const { return udp_sock_id; }
     int getTcpSockId() const { return tcp_sock_id; }
 
-    void connectToOracle(const string& dest_ip, uint16_t dest_port) {
+    void connectToOracle(string & dest_ip, uint16_t dest_port) {
         struct sockaddr_in dest_addr;
         dest_addr.sin_family = AF_INET;
         dest_addr.sin_port = htons(dest_port);
@@ -65,7 +86,7 @@ public:
         cerr << "ip "<< ip_port_vns.first << " port " << ip_port_vns.second << endl;
         uint32_t ip = ip_port_vns.first;
         memcpy(msg, &ip, 4);
-        cerr << (int)(msg[0]) << endl;
+        // cerr << (int)(msg[0]) << endl;
         // next 2 bytes are port
         uint16_t port = htons(ip_port_vns.second);
         memcpy(msg + 4, &port, 2);
@@ -113,12 +134,13 @@ public:
             seq_num = (seq_num << 8) | (unsigned char)msg_from_neigh[index+i];
         }
         index+=4;
-        if(seq_num <= latest_seq_num[origin_id]){
+        if(seq_num < latest_seq_num[origin_id]){
             cerr << "Virtual Node " << char('A' + id) << " received outdated LSP from Node " 
                  << char('A' + sender_id) << ": Origin " << char('A' + origin_id) 
                  << ", SeqNum " << seq_num << ". Discarding." << endl;
             return {-1,{-1,-1}}; // discard outdated message
         }
+        latest_seq_num[origin_id] = seq_num;
         uint16_t length = ((unsigned char)msg_from_neigh[index] << 8) | (unsigned char)msg_from_neigh[index+1];
         index+=2;
         int num_neighbors = length / 5;
@@ -143,13 +165,18 @@ public:
             cerr << "(" << char('A' + neigh_id) << ", " << cost << ") ";
         }
         cerr << "]" << endl;
+        cout<<"origin_id = "<<origin_id<<" sender_id = "<<sender_id<<endl;
         return {index,{origin_id,sender_id}};
     }
+
     void handleUdpMessage(fd_set& read_fds) {
         if (FD_ISSET(udp_sock_id, &read_fds)) {
             byte msg_from_neigh[BUFF_SIZE];
             int index = 0;
-            int received_bytes = recv(udp_sock_id, msg_from_neigh, BUFF_SIZE, 0);
+            struct sockaddr_in sender_addr;
+            socklen_t addr_len = sizeof(sender_addr);
+            int received_bytes = recvfrom(udp_sock_id, msg_from_neigh, BUFF_SIZE, 0,
+                                          (struct sockaddr*)&sender_addr, &addr_len);
             if(received_bytes <0){
                 perror("Error receiving UDP message");
                 close(udp_sock_id);
@@ -174,15 +201,17 @@ public:
                 if(neigh.first != sender_id && neigh.first != origin_id){ // add the above condition
                     uint32_t neigh_ip = ip_port_mapping[neigh.first].first;
                     uint16_t neigh_port = ip_port_mapping[neigh.first].second;
+                    cerr<<"Forwarding to "<<char('A' + neigh.first)<<" ip "<<neigh_ip<<" port "<<neigh_port<<endl;
                     struct sockaddr_in dest_addr;
                     dest_addr.sin_family = AF_INET;
                     dest_addr.sin_port = htons(neigh_port);
                     dest_addr.sin_addr.s_addr = neigh_ip;
                     memset(&(dest_addr.sin_zero), '\0', 8);
-                    if(send(udp_sock_id,msg_from_neigh,index,0)<0){
+                    if(sendto(udp_sock_id,msg_from_neigh,index,0,(struct sockaddr*)&dest_addr,sizeof(dest_addr))<0){
                         perror("udp send error Line 179");
                         exit(EXIT_FAILURE);
                     }
+                    cerr << "UDP msg sent" << endl;
                 }
             }
             cerr<<"Exited Udp"<<endl;
@@ -207,6 +236,7 @@ public:
             byte lsp_msg[BUFF_SIZE];
             int lsp_msg_len = create_lsp_msg(lsp_msg);
             cerr<<"Size of adj "<<adj_list[id].size()<<endl;
+            sleep(5);
             for (auto& neigh : adj_list[id]) {
                 int neigh_id = neigh.first;
                 struct sockaddr_in dest_addr_vn;
@@ -214,14 +244,15 @@ public:
                 dest_addr_vn.sin_port = htons(ip_port_mapping[neigh_id].second);
                 dest_addr_vn.sin_addr.s_addr = ip_port_mapping[neigh_id].first;
                 memset(&(dest_addr_vn.sin_zero), '\0', 8);
-                cerr<<"Sending"<<endl;
-                if (sendto(udp_sock_id, lsp_msg, lsp_msg_len, 0,
-                           (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
+                cerr<<"Sending to "<<char('A' + neigh_id)<<" ip "<<ip_port_mapping[neigh_id].first<<" port "<<ip_port_mapping[neigh_id].second<<endl;
+                int sent_bytes = 0;
+                if ((sent_bytes = sendto(udp_sock_id, lsp_msg, lsp_msg_len, 0,
+                           (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) )< 0) {
                     perror("Error sending LSP message");
                     close(udp_sock_id);
                     exit(EXIT_FAILURE);
                 }
-                cerr<<"Sent"<<endl;
+                cerr<<"Sent"<<" "<<sent_bytes<<endl;
             }
         }
     }
@@ -255,6 +286,8 @@ public:
             for(int i=0;i<4;i++){
                 ip = (ip << 8) | (unsigned char)msg_from_on[index+i];
             }
+            ip = htonl(ip);
+            cerr<<"Modified ip line 288"<<ip<<endl;
             index+=4;
             // next 2 bytes are port
             uint16_t port = ((unsigned char)msg_from_on[index] << 8) | (unsigned char)msg_from_on[index+1];
@@ -270,13 +303,18 @@ public:
                 adj_list[this->id]=tmp_vec;
                 break;
             }
-            cerr << "Virtual Node " << char('A' + this->id) << " received from Oracle: Node " 
-                 << char('A' + node_id) << ", IP " << ((ip >> 24) & 0xFF) << "." 
-                 << ((ip >> 16) & 0xFF) << "." << ((ip >> 8) & 0xFF) << "." 
-                 << (ip & 0xFF) << ", Port " << port << ", Cost " << cost << endl;
+            // cerr << "Virtual Node " << char('A' + this->id) << " received from Oracle: Node " 
+            //      << char('A' + node_id) << ", IP " << ((ip >> 24) & 0xFF) << "." 
+            //      << ((ip >> 16) & 0xFF) << "." << ((ip >> 8) & 0xFF) << "."
+            //      << (ip & 0xFF) << ", Port " << port << ", Cost " << cost << endl;
             ip_port_mapping[node_id] = {ip, port};
             tmp_vec.push_back({node_id, cost});
         }
+        cerr << "Virtual Node " << char('A' + this->id) << " initialized with neighbors: ";
+        for (const auto& neigh : tmp_vec) {
+            cerr << "(" << char('A' + neigh.first) << ", " << neigh.second << ") ";
+        }
+        cerr << endl;
     }
     
 
@@ -298,56 +336,45 @@ int main(int argc, char* argv[]) {
     //     return EXIT_FAILURE;
     // }(socketHandle + 1, &rfds, NULL, NULL, &tv);
 
-    string DEST_IP = "10.51.11.2";
+    string DEST_IP = "192.168.0.101";
     uint16_t DEST_PORT = 8080;
 
     // create 26 virtual nodes with their ip and port randomly for testing
-    vector<pair<string,string>> ip_port_vns = {
-            {"10.51.11.2", "8000"}, {"10.51.11.2", "9090"}, {"10.51.11.2", "3000"},
-            {"10.51.11.2", "4500"}, {"10.51.11.2", "1234"}, {"10.51.11.2", "5555"},
-            {"10.51.11.2", "8081"}, {"10.51.11.2", "6000"}, {"10.51.11.2", "7000"},
-            {"10.51.11.2", "4040"}, {"10.51.11.2", "5050"}, {"10.51.11.2", "2020"},
-            {"10.51.11.2", "8082"}, {"10.51.11.2", "9091"}, {"10.51.11.2", "6060"},
-            {"10.51.11.2", "7070"}, {"10.51.11.2", "8085"}, {"10.51.11.2", "9095"},
-            {"192.168.3.30", "3030"}, {"10.5.5.5", "5055"}, {"172.21.2.6", "6065"},
-            {"192.168.8.12", "8088"}, {"10.6.6.6", "9099"}, {"172.22.3.3", "7077"},
-            {"192.168.4.44", "4044"}, {"10.7.7.7", "5059"}
+    // vector<pair<string,string>> ip_port_vns = {
+    //         {DEST_IP, "8000"}, {DEST_IP, "9090"}, {DEST_IP, "3000"},
+    //         {DEST_IP, "4500"}, {DEST_IP, "1234"}, {DEST_IP, "5555"},
+    //         {DEST_IP, "8081"}, {DEST_IP, "6000"}, {DEST_IP, "7000"},
+    //         {DEST_IP, "4040"}, {DEST_IP, "5050"}, {DEST_IP, "2020"},
+    //         {DEST_IP, "8082"}, {DEST_IP, "9091"}, {DEST_IP, "6060"},
+    //         {DEST_IP, "7070"}, {DEST_IP, "8085"}, {DEST_IP, "9095"},
+    //         {DEST_IP, "3030"}, {DEST_IP, "5055"}, {DEST_IP, "6065"},
+    //         {DEST_IP, "8088"}, {DEST_IP, "9099"}, {DEST_IP, "7077"},
+    //         {DEST_IP, "4044"}, {DEST_IP, "5059"}
         
-    };
+    // };
+    uint32_t ip_ = inet_addr(DEST_IP.c_str());
+    VirtualNode* vn = new VirtualNode(ip_);
+    cerr << "Created Virtual Node "<< " with IP " 
+            << vn->ip_port_vns.first << " and Port " << vn->ip_port_vns.second << endl;
 
-    vector<VirtualNode*> virtualNodes(26,nullptr);
-    for (int i = 0; i < ip_port_vns.size(); ++i) {
-        uint32_t ip = inet_addr(ip_port_vns[i].first.c_str());
-        uint16_t port = stoi(ip_port_vns[i].second); 
-        pair<uint32_t,uint16_t> p = {ip,port};
-        VirtualNode *vn1 = new VirtualNode(i,p);
-        virtualNodes[i]=vn1;
-        cerr << "Created Virtual Node " << char('A' + i) << " with IP " 
-             << ip_port_vns[i].first << " and Port " << ip_port_vns[i].second << endl;
-    }
 
-    for (auto& vn : virtualNodes) {
-        vn->connectToOracle(DEST_IP, DEST_PORT);
-    }
-
-    fd_set read_fds;
-    int max_fd = 0;
-    for (const auto& vn : virtualNodes) {
-        max_fd = max(max_fd, max(vn->getUdpSockId(), vn->getTcpSockId()));
-    }
-
-    timeval t;
+    vn->connectToOracle(DEST_IP, DEST_PORT);
+    
+    
     while (true) {
-        FD_ZERO(&read_fds);
-        for (const auto& vn : virtualNodes) {
-            cerr<<"tcp socket "<<(vn->getTcpSockId())<<" udp socket "<<vn->getUdpSockId()<<endl;
-            FD_SET(vn->getTcpSockId(), &read_fds);
-            FD_SET(vn->getUdpSockId(), &read_fds);
-        }
 
-        t.tv_sec = 20;
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(vn->getTcpSockId(), &read_fds);
+        // cerr<<"Is Tcp set?"<<FD_ISSET(vn->getTcpSockId(), &read_fds)<<endl;
+        // cerr<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
+        FD_SET(vn->getUdpSockId(), &read_fds);
+        // cerr<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
+        int max_fd = max(vn->getTcpSockId(), vn->getUdpSockId());
+        timeval t;
+        t.tv_sec =2;
         t.tv_usec = 0;  
-        cerr<<"max fd "<<max_fd+1<<endl;
+        // cerr<<"max fd "<<max_fd+1<<endl;
         int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, &t);
         if (activity < 0) {
             perror("select error");
@@ -356,28 +383,36 @@ int main(int argc, char* argv[]) {
             cerr << "Timeout occurred, no activity detected." << endl;
             continue;
         }
+        else{
 
-        for (auto& vn : virtualNodes) {
-            vn->handleTcpMessage(read_fds);
-            vn->handleUdpMessage(read_fds);
+            if(FD_ISSET(vn->getTcpSockId(), &read_fds)){
+                cerr<<"Tcp is set"<<endl;
+                vn->handleTcpMessage(read_fds);
+            }
+            
+            if(FD_ISSET(vn->getUdpSockId(), &read_fds)){
+                cerr<<"Udp is set"<<endl;
+                vn->handleUdpMessage(read_fds);
+            }
+            // Periodically send LSP messages
+            // static time_t last_lsp_time = time(nullptr);
+            // time_t current_time = time(nullptr);
+    
+            // if (difftime(current_time, last_lsp_time) >= 15) {
+            //     for (auto& vn : virtualNodes) {
+            //         vn.sendPeriodicLSP();
+            //     }
+    
+            //     // Display the state of the adjacency list for each virtual node
+            //     for (const auto& vn : virtualNodes) {
+            //         vn.displayAdjList();
+            //     }
+    
+            //     last_lsp_time = current_time;
+            // }
         }
 
-        // Periodically send LSP messages
-        // static time_t last_lsp_time = time(nullptr);
-        // time_t current_time = time(nullptr);
-
-        // if (difftime(current_time, last_lsp_time) >= 15) {
-        //     for (auto& vn : virtualNodes) {
-        //         vn.sendPeriodicLSP();
-        //     }
-
-        //     // Display the state of the adjacency list for each virtual node
-        //     for (const auto& vn : virtualNodes) {
-        //         vn.displayAdjList();
-        //     }
-
-        //     last_lsp_time = current_time;
-        // }
+           
     }
 
     return 0;
