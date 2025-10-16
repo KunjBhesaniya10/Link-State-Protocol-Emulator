@@ -27,6 +27,7 @@ public class OracleNode {
    char newClientId = 'A';
    int connectedClients;
    int totalClients;
+   
    Boolean FirstTime = true;
 
    private static volatile boolean running = true;  
@@ -34,6 +35,7 @@ public class OracleNode {
    OracleNode(String ip, String configFile){
         this.port = 5000;
         clientChannels = new HashMap<>();
+        
         channelToClientId = new HashMap<>();
         AdjacencyList = new HashMap<>();
         ipPortInfo = new HashMap<>();
@@ -163,24 +165,31 @@ public class OracleNode {
     }
 
     void sendMessageToAllClients(){
-        for(Character clientId : clientChannels.keySet()){
-            if(clientId-'A'+1 > totalClients){
+        for(Character clientId : AdjacencyList.keySet()){
+
+            SocketChannel clientChannel;
+            if(!clientChannels.containsKey(clientId)){
+                System.err.println("Client " + clientId + " not connected. Skipping message send.");
                 continue;
+            }else{
+                clientChannel = clientChannels.get(clientId);
             }
-            SocketChannel clientChannel = clientChannels.get(clientId);
+
             List<Edge> edges = AdjacencyList.get(clientId);
             byte[] message = new byte[256];
             int index = 0;
-    
-            for(Edge edge : edges){
-                message[index++] = (byte) edge.target.charValue();
-                index = addIpPortToMessage(message, index, edge.target);
-                byte[] weightBytes = ByteBuffer.allocate(4).putInt(edge.weight).array();
-                for(int k=0; k<4; k++){
-                    message[index++] = weightBytes[k];
-                }
-            }         
-    
+            
+            if(edges.size() > 0){
+                for(Edge edge : edges){
+                    message[index++] = (byte) edge.target.charValue();
+                    index = addIpPortToMessage(message, index, edge.target);
+                    byte[] weightBytes = ByteBuffer.allocate(4).putInt(edge.weight).array();
+                    for(int k=0; k<4; k++){
+                        message[index++] = weightBytes[k];
+                    }
+                }      
+            }
+            
              
             // add own info at the end
             message[index++] = (byte) clientId.charValue();
