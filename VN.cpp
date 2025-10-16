@@ -39,7 +39,7 @@ public:
         // Bind UDP socket
         struct sockaddr_in local_addr;
         local_addr.sin_family = AF_INET;
-        local_addr.sin_port = 0; // Let OS assign an ep remandom port
+        local_addr.sin_port = 0; 
         local_addr.sin_addr.s_addr = ip; // Listen on all available network interfaces
         
         memset(&(local_addr.sin_zero), '\0', 8);
@@ -119,7 +119,7 @@ public:
             index += 4;
         }
         
-        return index; // return length of message
+        return index; // returns the length of message
         
     }
 
@@ -233,48 +233,35 @@ public:
             }
             parse_msg_on(msg_from_on);
 
-            byte lsp_msg[BUFF_SIZE];
-            int lsp_msg_len = create_lsp_msg(lsp_msg);
-            cout<<"Size of adj "<<adj_list[id].size()<<endl;
             sleep(5);
-            for (auto& neigh : adj_list[id]) {
-                int neigh_id = neigh.first;
-                struct sockaddr_in dest_addr_vn;
-                dest_addr_vn.sin_family = AF_INET;
-                dest_addr_vn.sin_port = htons(ip_port_mapping[neigh_id].second);
-                dest_addr_vn.sin_addr.s_addr = ip_port_mapping[neigh_id].first;
-                memset(&(dest_addr_vn.sin_zero), '\0', 8);
-                cout<<"Sending to "<<char('A' + neigh_id)<<" ip "<<ip_port_mapping[neigh_id].first<<" port "<<ip_port_mapping[neigh_id].second<<endl;
-                int sent_bytes = 0;
-                if ((sent_bytes = sendto(udp_sock_id, lsp_msg, lsp_msg_len, 0,
-                           (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) )< 0) {
-                    perror("Error sending LSP message");
-                    close(udp_sock_id);
-                    exit(EXIT_FAILURE);
-                }
-                cout<<"Sent"<<" "<<sent_bytes<<endl;
-            }
+            
+            sendLSP(); // send initial LSP after getting neighbors from oracle
         }
     }
 
-    // void sendPeriodicLSP() {
-    //     string lsp_msg = create_lsp_msg(id, ip_port_mapping, adj_list);
-    //     const char* lsp_msg_to_send = lsp_msg.c_str();
-    //     for (auto& neigh : adj_list[id]) {
-    //         int neigh_id = neigh.first;
-    //         struct sockaddr_in dest_addr_vn;
-    //         dest_addr_vn.sin_family = AF_INET;
-    //         dest_addr_vn.sin_port = htons(stoi(ip_port_mapping[neigh_id].second));
-    //         dest_addr_vn.sin_addr.s_addr = inet_addr(ip_port_mapping[neigh_id].first.c_str());
-    //         memset(&(dest_addr_vn.sin_zero), '\0', 8);
-    //         if (sendto(udp_sock_id, lsp_msg_to_send, strlen(lsp_msg_to_send), 0,
-    //                    (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) < 0) {
-    //             perror("Error sending LSP message");
-    //             close(udp_sock_id);
-    //             exit(EXIT_FAILURE);
-    //         }
-    //     }
-    // }
+    void sendLSP() {
+        byte lsp_msg[BUFF_SIZE];
+        int lsp_msg_len = create_lsp_msg(lsp_msg);
+        cout<<"Size of adj "<<adj_list[id].size()<<endl;
+        for (auto& neigh : adj_list[id]) {
+            int neigh_id = neigh.first;
+            struct sockaddr_in dest_addr_vn;
+            dest_addr_vn.sin_family = AF_INET;
+            dest_addr_vn.sin_port = htons(ip_port_mapping[neigh_id].second);
+            dest_addr_vn.sin_addr.s_addr = ip_port_mapping[neigh_id].first;
+            memset(&(dest_addr_vn.sin_zero), '\0', 8);
+            cout<<"Sending to "<<char('A' + neigh_id)<<" ip "<<ip_port_mapping[neigh_id].first<<" port "<<ip_port_mapping[neigh_id].second<<endl;
+            int sent_bytes = 0;
+            if ((sent_bytes = sendto(udp_sock_id, lsp_msg, lsp_msg_len, 0,
+                        (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) )< 0) {
+                perror("Error sending LSP message");
+                close(udp_sock_id);
+                exit(EXIT_FAILURE);
+            }
+            cout<<"Sent"<<" "<<sent_bytes<<endl;
+        }
+    }
+
     void parse_msg_on(byte msg_from_on[]){
         int index = 0;
         vector<pair<int,int>>tmp_vec;
@@ -303,10 +290,6 @@ public:
                 adj_list[this->id]=tmp_vec;
                 break;
             }
-            // cout << "Virtual Node " << char('A' + this->id) << " received from Oracle: Node " 
-            //      << char('A' + node_id) << ", IP " << ((ip >> 24) & 0xFF) << "." 
-            //      << ((ip >> 16) & 0xFF) << "." << ((ip >> 8) & 0xFF) << "."
-            //      << (ip & 0xFF) << ", Port " << port << ", Cost " << cost << endl;
             ip_port_mapping[node_id] = {ip, port};
             tmp_vec.push_back({node_id, cost});
         }
@@ -315,9 +298,7 @@ public:
             cout << "(" << char('A' + neigh.first) << ", " << neigh.second << ") ";
         }
         cout << endl;
-        // adj_list[this->id]=tmp_vec;
     }
-    
 
     void displayAdjList() const {
         cout << "Adjacency list for virtual node " << char('A' + id) << ":" << endl;
@@ -340,19 +321,6 @@ int main(int argc, char* argv[]) {
     string DEST_IP = "192.168.72.56";
     uint16_t DEST_PORT = 8080;
 
-    // create 26 virtual nodes with their ip and port randomly for testing
-    // vector<pair<string,string>> ip_port_vns = {
-    //         {DEST_IP, "8000"}, {DEST_IP, "9090"}, {DEST_IP, "3000"},
-    //         {DEST_IP, "4500"}, {DEST_IP, "1234"}, {DEST_IP, "5555"},
-    //         {DEST_IP, "8081"}, {DEST_IP, "6000"}, {DEST_IP, "7000"},
-    //         {DEST_IP, "4040"}, {DEST_IP, "5050"}, {DEST_IP, "2020"},
-    //         {DEST_IP, "8082"}, {DEST_IP, "9091"}, {DEST_IP, "6060"},
-    //         {DEST_IP, "7070"}, {DEST_IP, "8085"}, {DEST_IP, "9095"},
-    //         {DEST_IP, "3030"}, {DEST_IP, "5055"}, {DEST_IP, "6065"},
-    //         {DEST_IP, "8088"}, {DEST_IP, "9099"}, {DEST_IP, "7077"},
-    //         {DEST_IP, "4044"}, {DEST_IP, "5059"}
-        
-    // };
     uint32_t ip_ = inet_addr(DEST_IP.c_str());
     VirtualNode* vn = new VirtualNode(ip_);
     cout << "Created Virtual Node "<< " with IP " 
@@ -361,16 +329,15 @@ int main(int argc, char* argv[]) {
 
     vn->connectToOracle(DEST_IP, DEST_PORT);
     
+    time_t last_time = time(nullptr);
     
     while (true) {
 
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(vn->getTcpSockId(), &read_fds);
-        // cout<<"Is Tcp set?"<<FD_ISSET(vn->getTcpSockId(), &read_fds)<<endl;
-        // cout<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
         FD_SET(vn->getUdpSockId(), &read_fds);
-        // cout<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
+
         int max_fd = max(vn->getTcpSockId(), vn->getUdpSockId());
         timeval t;
         t.tv_sec = 2;
@@ -382,6 +349,7 @@ int main(int argc, char* argv[]) {
             return EXIT_FAILURE;
         } else if (activity == 0) {
             cout << "Timeout occurred, no activity detected." << endl;
+            vn->displayAdjList();
             continue;
         }
         else{
@@ -396,27 +364,14 @@ int main(int argc, char* argv[]) {
                 vn->handleUdpMessage(read_fds);
             }
 
-            //print adj list
-            vn->displayAdjList();
-            // Periodically send LSP messages
-            // static time_t last_lsp_time = time(nullptr);
-            // time_t current_time = time(nullptr);
-    
-            // if (difftime(current_time, last_lsp_time) >= 15) {
-            //     for (auto& vn : virtualNodes) {
-            //         vn.sendPeriodicLSP();
-            //     }
-    
-            //     // Display the state of the adjacency list for each virtual node
-            //     for (const auto& vn : virtualNodes) {
-            //         vn.displayAdjList();
-            //     }
-    
-            //     last_lsp_time = current_time;
-            // }
+            time_t current_time = time(nullptr);
+            if(current_time - last_time > 30){
+                last_time = current_time;
+                vn->sendLSP();
+            }
+            
         }
-
-           
+   
     }
 
     return 0;
