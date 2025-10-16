@@ -252,17 +252,26 @@ public:
         {
             byte msg_from_on[BUFF_SIZE];
             int received_bytes = recv(tcp_sock_id, msg_from_on, BUFF_SIZE, 0);
-            if (received_bytes < 0)
+            if (received_bytes == 0) // server closed
+            {
+                perror("Server Closed");
+                close(tcp_sock_id);
+                exit(EXIT_FAILURE);
+            }
+            else if (received_bytes < 0)
             {
                 perror("Error receiving TCP message");
                 close(tcp_sock_id);
                 exit(EXIT_FAILURE);
             }
-            parse_msg_on(msg_from_on);
+            else
+            {
+                parse_msg_on(msg_from_on);
 
-            sleep(5);
+                sleep(5);
 
-            sendLSP(); // send initial LSP after getting neighbors from oracle
+                sendLSP(); // send initial LSP after getting neighbors from oracle}
+            }
         }
     }
 
@@ -393,7 +402,7 @@ int main(int argc, char *argv[])
 {
     if (argc != 2)
     {
-        cout << "Usage: " << argv[0] << " <DEST_IP>" << endl;
+        cout << "Usage: " << argv[0] << " <DEST_IP (Oracle Node)>" << endl;
         return EXIT_FAILURE;
     }
     string DEST_IP = argv[1];
@@ -432,7 +441,7 @@ int main(int argc, char *argv[])
             cout << "Timeout occurred, no activity detected." << endl;
             vn->displayAdjList();
             vn->applyDijktras();
-            continue;
+            // continue;
         }
         else
         {
@@ -450,10 +459,12 @@ int main(int argc, char *argv[])
             }
         }
         time_t current_time = time(nullptr);
-        if (current_time - last_time > 30)
+        if (current_time - last_time > 5)
         {
+            cerr << "Sending periodic LSP" << endl;
             last_time = current_time;
             vn->sendLSP();
+            cerr << "Sent periodic LSP" << endl;
         }
     }
     return 0;
