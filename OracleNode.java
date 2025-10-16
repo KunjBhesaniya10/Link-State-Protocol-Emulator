@@ -123,8 +123,12 @@ public class OracleNode {
                     }
                     node = (char)(node.charValue() + 1);
                 }
-            
-                totalClients = AdjacencyList.size();
+                totalClients=0;
+                for(Character key : AdjacencyList.keySet()){
+                    if(AdjacencyList.get(key).size() > 0){
+                        totalClients++;
+                    }
+                }
                 return true;
                 
             }
