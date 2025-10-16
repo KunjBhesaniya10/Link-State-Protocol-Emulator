@@ -83,10 +83,10 @@ public:
         // cout<<"HI"<<endl;
         byte msg[6];
         // first 4 bytes are ip
-        cerr << "ip "<< ip_port_vns.first << " port " << ip_port_vns.second << endl;
+        cout << "ip "<< ip_port_vns.first << " port " << ip_port_vns.second << endl;
         uint32_t ip = ip_port_vns.first;
         memcpy(msg, &ip, 4);
-        // cerr << (int)(msg[0]) << endl;
+        // cout << (int)(msg[0]) << endl;
         // next 2 bytes are port
         uint16_t port = htons(ip_port_vns.second);
         memcpy(msg + 4, &port, 2);
@@ -134,24 +134,24 @@ public:
             seq_num = (seq_num << 8) | (unsigned char)msg_from_neigh[index+i];
         }
         index+=4;
-        if(seq_num < latest_seq_num[origin_id]){
-            cerr << "Virtual Node " << char('A' + id) << " received outdated LSP from Node " 
-                 << char('A' + sender_id) << ": Origin " << char('A' + origin_id) 
+        if (latest_seq_num.count(origin_id) && seq_num <= latest_seq_num[origin_id]) {
+            cout << "Virtual Node " << char('A' + id) << " received outdated/seen LSP from Node "
+                 << char('A' + sender_id) << ": Origin " << char('A' + origin_id)
                  << ", SeqNum " << seq_num << ". Discarding." << endl;
-            return {-1,{-1,-1}}; // discard outdated message
+            return {-1, {-1, -1}}; // Discard outdated or already processed message
         }
         latest_seq_num[origin_id] = seq_num;
         uint16_t length = ((unsigned char)msg_from_neigh[index] << 8) | (unsigned char)msg_from_neigh[index+1];
         index+=2;
         int num_neighbors = length / 5;
-        cerr << "Virtual Node " << char('A' + id) << " received LSP from Node " 
+        cout << "Virtual Node " << char('A' + id) << " received LSP from Node " 
              << char('A' + sender_id) << ": Origin " << char('A' + origin_id) 
              << ", SeqNum " << seq_num << ", Neighbors [";
         
         adj_list[origin_id].clear(); // clear old neighbor info
         for (int i = 0; i < num_neighbors; ++i) {
             if (index + 5 > received_bytes) {
-                cerr << "Incomplete neighbor info in LSP message." << endl;
+                cout << "Incomplete neighbor info in LSP message." << endl;
                 exit(EXIT_FAILURE);
             }
             int neigh_id = ((char)msg_from_neigh[index]) - 'A';
@@ -162,9 +162,9 @@ public:
             }
             index+=4;
             adj_list[origin_id].push_back({neigh_id, cost});
-            cerr << "(" << char('A' + neigh_id) << ", " << cost << ") ";
+            cout << "(" << char('A' + neigh_id) << ", " << cost << ") ";
         }
-        cerr << "]" << endl;
+        cout << "]" << endl;
         cout<<"origin_id = "<<origin_id<<" sender_id = "<<sender_id<<endl;
         return {index,{origin_id,sender_id}};
     }
@@ -195,13 +195,13 @@ public:
             }
             // forward to all neighbors except the sender and the originator
             //sender id on index 1
-            msg_from_neigh[1] = (byte) (id + 'A') ;
-            cerr<<"Entered udp"<<endl;
+            msg_from_neigh[1] = (byte) ((char) (id + 'A')) ;
+            cout<<"Entered udp"<<endl;
             for(auto neigh : adj_list[id]){
                 if(neigh.first != sender_id && neigh.first != origin_id){ // add the above condition
                     uint32_t neigh_ip = ip_port_mapping[neigh.first].first;
                     uint16_t neigh_port = ip_port_mapping[neigh.first].second;
-                    cerr<<"Forwarding to "<<char('A' + neigh.first)<<" ip "<<neigh_ip<<" port "<<neigh_port<<endl;
+                    cout<<"Forwarding to "<<char('A' + neigh.first)<<" ip "<<neigh_ip<<" port "<<neigh_port<<endl;
                     struct sockaddr_in dest_addr;
                     dest_addr.sin_family = AF_INET;
                     dest_addr.sin_port = htons(neigh_port);
@@ -211,14 +211,14 @@ public:
                         perror("udp send error Line 179");
                         exit(EXIT_FAILURE);
                     }
-                    cerr << "UDP msg sent" << endl;
+                    cout << "UDP msg sent" << endl;
                 }
             }
-            cerr<<"Exited Udp"<<endl;
+            cout<<"Exited Udp"<<endl;
             
         }
         else{
-            cerr<<"Udp unouched"<<endl;
+            cout<<"Udp unouched"<<endl;
         }
     }
 
@@ -235,7 +235,7 @@ public:
 
             byte lsp_msg[BUFF_SIZE];
             int lsp_msg_len = create_lsp_msg(lsp_msg);
-            cerr<<"Size of adj "<<adj_list[id].size()<<endl;
+            cout<<"Size of adj "<<adj_list[id].size()<<endl;
             sleep(5);
             for (auto& neigh : adj_list[id]) {
                 int neigh_id = neigh.first;
@@ -244,7 +244,7 @@ public:
                 dest_addr_vn.sin_port = htons(ip_port_mapping[neigh_id].second);
                 dest_addr_vn.sin_addr.s_addr = ip_port_mapping[neigh_id].first;
                 memset(&(dest_addr_vn.sin_zero), '\0', 8);
-                cerr<<"Sending to "<<char('A' + neigh_id)<<" ip "<<ip_port_mapping[neigh_id].first<<" port "<<ip_port_mapping[neigh_id].second<<endl;
+                cout<<"Sending to "<<char('A' + neigh_id)<<" ip "<<ip_port_mapping[neigh_id].first<<" port "<<ip_port_mapping[neigh_id].second<<endl;
                 int sent_bytes = 0;
                 if ((sent_bytes = sendto(udp_sock_id, lsp_msg, lsp_msg_len, 0,
                            (const sockaddr*)&dest_addr_vn, sizeof(dest_addr_vn)) )< 0) {
@@ -252,7 +252,7 @@ public:
                     close(udp_sock_id);
                     exit(EXIT_FAILURE);
                 }
-                cerr<<"Sent"<<" "<<sent_bytes<<endl;
+                cout<<"Sent"<<" "<<sent_bytes<<endl;
             }
         }
     }
@@ -287,7 +287,7 @@ public:
                 ip = (ip << 8) | (unsigned char)msg_from_on[index+i];
             }
             ip = htonl(ip);
-            cerr<<"Modified ip line 288"<<ip<<endl;
+            cout<<"Modified ip line 288"<<ip<<endl;
             index+=4;
             // next 2 bytes are port
             uint16_t port = ((unsigned char)msg_from_on[index] << 8) | (unsigned char)msg_from_on[index+1];
@@ -303,18 +303,19 @@ public:
                 adj_list[this->id]=tmp_vec;
                 break;
             }
-            // cerr << "Virtual Node " << char('A' + this->id) << " received from Oracle: Node " 
+            // cout << "Virtual Node " << char('A' + this->id) << " received from Oracle: Node " 
             //      << char('A' + node_id) << ", IP " << ((ip >> 24) & 0xFF) << "." 
             //      << ((ip >> 16) & 0xFF) << "." << ((ip >> 8) & 0xFF) << "."
             //      << (ip & 0xFF) << ", Port " << port << ", Cost " << cost << endl;
             ip_port_mapping[node_id] = {ip, port};
             tmp_vec.push_back({node_id, cost});
         }
-        cerr << "Virtual Node " << char('A' + this->id) << " initialized with neighbors: ";
+        cout << "Virtual Node " << char('A' + this->id) << " initialized with neighbors: ";
         for (const auto& neigh : tmp_vec) {
-            cerr << "(" << char('A' + neigh.first) << ", " << neigh.second << ") ";
+            cout << "(" << char('A' + neigh.first) << ", " << neigh.second << ") ";
         }
-        cerr << endl;
+        cout << endl;
+        // adj_list[this->id]=tmp_vec;
     }
     
 
@@ -332,11 +333,11 @@ public:
 };
 int main(int argc, char* argv[]) {
     // if (argc != 3) {
-    //     cerr << "Usage: " << argv[0] << " <DEST_IP> <DEST_PORT>" << endl;
+    //     cout << "Usage: " << argv[0] << " <DEST_IP> <DEST_PORT>" << endl;
     //     return EXIT_FAILURE;
     // }(socketHandle + 1, &rfds, NULL, NULL, &tv);
 
-    string DEST_IP = "192.168.0.101";
+    string DEST_IP = "192.168.72.56";
     uint16_t DEST_PORT = 8080;
 
     // create 26 virtual nodes with their ip and port randomly for testing
@@ -354,7 +355,7 @@ int main(int argc, char* argv[]) {
     // };
     uint32_t ip_ = inet_addr(DEST_IP.c_str());
     VirtualNode* vn = new VirtualNode(ip_);
-    cerr << "Created Virtual Node "<< " with IP " 
+    cout << "Created Virtual Node "<< " with IP " 
             << vn->ip_port_vns.first << " and Port " << vn->ip_port_vns.second << endl;
 
 
@@ -366,34 +367,37 @@ int main(int argc, char* argv[]) {
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(vn->getTcpSockId(), &read_fds);
-        // cerr<<"Is Tcp set?"<<FD_ISSET(vn->getTcpSockId(), &read_fds)<<endl;
-        // cerr<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
+        // cout<<"Is Tcp set?"<<FD_ISSET(vn->getTcpSockId(), &read_fds)<<endl;
+        // cout<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
         FD_SET(vn->getUdpSockId(), &read_fds);
-        // cerr<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
+        // cout<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
         int max_fd = max(vn->getTcpSockId(), vn->getUdpSockId());
         timeval t;
-        t.tv_sec =2;
+        t.tv_sec = 2;
         t.tv_usec = 0;  
-        // cerr<<"max fd "<<max_fd+1<<endl;
+        // cout<<"max fd "<<max_fd+1<<endl;
         int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, &t);
         if (activity < 0) {
             perror("select error");
             return EXIT_FAILURE;
         } else if (activity == 0) {
-            cerr << "Timeout occurred, no activity detected." << endl;
+            cout << "Timeout occurred, no activity detected." << endl;
             continue;
         }
         else{
 
             if(FD_ISSET(vn->getTcpSockId(), &read_fds)){
-                cerr<<"Tcp is set"<<endl;
+                cout<<"Tcp is set"<<endl;
                 vn->handleTcpMessage(read_fds);
             }
             
             if(FD_ISSET(vn->getUdpSockId(), &read_fds)){
-                cerr<<"Udp is set"<<endl;
+                cout<<"Udp is set"<<endl;
                 vn->handleUdpMessage(read_fds);
             }
+
+            //print adj list
+            vn->displayAdjList();
             // Periodically send LSP messages
             // static time_t last_lsp_time = time(nullptr);
             // time_t current_time = time(nullptr);

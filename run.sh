@@ -1,9 +1,9 @@
-!bin/bash
+#!/bin/bash
 
-## run VN.cpp 5 times simultaneously open each in a new terminal window and close the terminal window after execution
-trap "pkill -P $$" EXIT
+# Run VN.cpp 5 times in different terminals and store the output in different files
 for i in {1..5}
 do
-  gnome-terminal -- bash -c "g++ VN.cpp -o VN && ./VN; exec bash"
+  #compile the code
+  g++ VN.cpp -o VN
+  gnome-terminal -- bash -c "./VN > output_$i.txt"
 done
-## add code such that if i kill this process all the terminal windows are also closed

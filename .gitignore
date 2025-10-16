@@ -1,5 +1,9 @@
 .vscode
 s
-sender
+sender*
+sender.*
 original_sender.cpp
 *.class
+virtual_node
+gep.cpp
+a.out

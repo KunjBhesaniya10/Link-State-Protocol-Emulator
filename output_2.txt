@@ -1,0 +1,134 @@
+0 tcp 4 udp 3
+Created Virtual Node  with IP 944285888 and Port 50577
+ip 944285888 port 50577
+Tcp is set
+Modified ip line 288944285888
+Modified ip line 288944285888
+Modified ip line 288944285888
+Modified ip line 288944285888
+Virtual Node B initialized with neighbors: (A, 3) (C, 2) (D, 4) 
+Size of adj 3
+Sending to A ip 944285888 port 35935
+Sent 23
+Sending to C ip 944285888 port 38386
+Sent 23
+Sending to D ip 944285888 port 37480
+Sent 23
+Adjacency list for virtual node B:
+  Node B -> (A, 3) (C, 2) (D, 4) 
+Udp is set
+Virtual Node B received LSP from Node A: Origin A, SeqNum 0, Neighbors [(B, 3) (C, 1) ]
+origin_id = 0 sender_id = 0
+Entered udp
+Forwarding to C ip 944285888 port 38386
+UDP msg sent
+Forwarding to D ip 944285888 port 37480
+UDP msg sent
+Exited Udp
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+Udp is set
+Virtual Node B received LSP from Node C: Origin C, SeqNum 0, Neighbors [(A, 1) (B, 2) (E, 1) ]
+origin_id = 2 sender_id = 2
+Entered udp
+Forwarding to A ip 944285888 port 35935
+UDP msg sent
+Forwarding to D ip 944285888 port 37480
+UDP msg sent
+Exited Udp
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+Udp is set
+Virtual Node B received outdated/seen LSP from Node C: Origin A, SeqNum 0. Discarding.
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+Udp is set
+Virtual Node B received outdated/seen LSP from Node A: Origin C, SeqNum 0. Discarding.
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+Udp is set
+Virtual Node B received LSP from Node D: Origin D, SeqNum 0, Neighbors [(B, 4) (E, 7) ]
+origin_id = 3 sender_id = 3
+Entered udp
+Forwarding to A ip 944285888 port 35935
+UDP msg sent
+Forwarding to C ip 944285888 port 38386
+UDP msg sent
+Exited Udp
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+  Node D -> (B, 4) (E, 7) 
+Udp is set
+Virtual Node B received LSP from Node C: Origin E, SeqNum 0, Neighbors [(C, 1) (D, 7) ]
+origin_id = 4 sender_id = 2
+Entered udp
+Forwarding to A ip 944285888 port 35935
+UDP msg sent
+Forwarding to D ip 944285888 port 37480
+UDP msg sent
+Exited Udp
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+  Node D -> (B, 4) (E, 7) 
+  Node E -> (C, 1) (D, 7) 
+Udp is set
+Virtual Node B received outdated/seen LSP from Node A: Origin E, SeqNum 0. Discarding.
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+  Node D -> (B, 4) (E, 7) 
+  Node E -> (C, 1) (D, 7) 
+Udp is set
+Virtual Node B received outdated/seen LSP from Node D: Origin E, SeqNum 0. Discarding.
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+  Node D -> (B, 4) (E, 7) 
+  Node E -> (C, 1) (D, 7) 
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Timeout occurred, no activity detected.
+Tcp is set
+Modified ip line 288944285888
+Modified ip line 288944285888
+Modified ip line 288944285888
+Modified ip line 288944285888
+Virtual Node B initialized with neighbors: (A, 3) (C, 2) (D, 4) 
+Size of adj 3
+Sending to A ip 944285888 port 35935
+Sent 23
+Sending to C ip 944285888 port 38386
+Sent 23
+Sending to D ip 944285888 port 37480
+Sent 23
+Adjacency list for virtual node B:
+  Node A -> (B, 3) (C, 1) 
+  Node B -> (A, 3) (C, 2) (D, 4) 
+  Node C -> (A, 1) (B, 2) (E, 1) 
+  Node D -> (B, 4) (E, 7) 
+  Node E -> (C, 1) (D, 7) 
+Tcp is set
+Modified ip line 288944285888
+Modified ip line 288944285888
+Modified ip line 288944285888
+Modified ip line 288944285888
+Virtual Node B initialized with neighbors: (A, 3) (C, 2) (D, 4) 
+Size of adj 3

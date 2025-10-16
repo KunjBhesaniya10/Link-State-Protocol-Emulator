@@ -5,8 +5,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define DEST_PORT 8080
-#define DEST_IP "10.17.44.176"
+#define DEST_PORT 8000
+#define DEST_IP "192.168.56.134"
 
 using namespace std;
 
