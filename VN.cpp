@@ -399,16 +399,17 @@ public:
     }
 };
 int main(int argc, char *argv[])
-{
-    if (argc != 2)
+{   
+    // ./VN <DEST_IP (Oracle Node)> <VN_IP>
+    if (argc != 3)
     {
-        cout << "Usage: " << argv[0] << " <DEST_IP (Oracle Node)>" << endl;
+        cout << "Usage: " << argv[0] << " <DEST_IP (Oracle Node)>" << " <VN_IP>" << endl;
         return EXIT_FAILURE;
     }
     string DEST_IP = argv[1];
-    uint16_t DEST_PORT = 8080;
-
-    uint32_t ip_ = inet_addr(DEST_IP.c_str());
+    uint16_t DEST_PORT = 5000;
+    string VN_IP = argv[2];
+    uint32_t ip_ = inet_addr(VN_IP.c_str());
     VirtualNode *vn = new VirtualNode(ip_);
     cout << "Created Virtual Node " << " with IP "
          << vn->ip_port_vns.first << " and Port " << vn->ip_port_vns.second << endl;

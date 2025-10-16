@@ -86,9 +86,10 @@ public class OracleNode {
     Boolean monitorConfigFile(){
     // monitor the config file for changes and update the adjacency list
         File file = new File(configFile);
-        if(file.lastModified() > lastModified){ 
+        // System.err.println("Last modified time: " + lastModified + ", Current modified time: " + file.lastModified());
+        if((long)file.lastModified() > lastModified){ 
             lastModified = file.lastModified();             
-            
+            // System.err.println("Config file has been modified. Updating adjacency list...");
             try(BufferedReader br = new BufferedReader(new FileReader(file))){
                 String line;
                 Character node = 'A';
@@ -124,6 +125,7 @@ public class OracleNode {
                 }
             
                 totalClients = AdjacencyList.size();
+                return true;
                 
             }
             catch(Exception e){
@@ -231,9 +233,11 @@ public class OracleNode {
                     System.err.println("First time sending messages to all clients.");
                     sendMessageToAllClients();
                     FirstTime = false;
-                }else if(currentTime - lastTime >= 30000){
+                }else if(currentTime - lastTime >= 10000){
+                    System.err.println("Checking for config file changes... ");
                     if(monitorConfigFile()){
                         sendMessageToAllClients();
+                        printAdjacencyList();
                     }
                     lastTime = currentTime;
                 }
