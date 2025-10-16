@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <vector>
 #include <map>
+#include <set>
+#include <limits.h>
 using namespace std;
 #define BUFF_SIZE 4096
 // #define DEST_IP "10.17.44.176"
@@ -287,7 +289,7 @@ public:
                 ip = (ip << 8) | (unsigned char)msg_from_on[index+i];
             }
             ip = htonl(ip);
-            cout<<"Modified ip line 288"<<ip<<endl;
+            // cout<<"Modified ip line 288"<<ip<<endl;
             index+=4;
             // next 2 bytes are port
             uint16_t port = ((unsigned char)msg_from_on[index] << 8) | (unsigned char)msg_from_on[index+1];
@@ -330,29 +332,45 @@ public:
             cout << endl;
         }
     }
+
+    void applyDijktras(){
+        set<pair<int,int>> s; // cost, node id
+        map<int,int> dist;
+        for(auto& entry : adj_list){
+            dist[entry.first] = INT_MAX;
+        }
+        dist[id] = 0;
+        s.insert({0,id});
+        while(!s.empty()){
+            auto it = s.begin();
+            int node = it->second;
+            s.erase(it);
+            for(auto& neigh : adj_list[node]){
+                int neigh_id = neigh.first;
+                int cost = neigh.second;
+                if(dist[node] + cost < dist[neigh_id]){
+                    auto it2 = s.find({dist[neigh_id], neigh_id});
+                    if(it2 != s.end()){
+                        s.erase(it2);
+                    }
+                    dist[neigh_id] = dist[node] + cost;
+                    s.insert({dist[neigh_id], neigh_id});
+                }
+            }
+        }
+        cout<<"Dijkstra result from node "<<char('A' + id)<<endl;
+        for(auto& entry : dist){
+            cout<<"Node "<<char('A' + entry.first)<<" Distance "<<entry.second<<endl;
+        }
+    }
 };
 int main(int argc, char* argv[]) {
-    // if (argc != 3) {
-    //     cout << "Usage: " << argv[0] << " <DEST_IP> <DEST_PORT>" << endl;
-    //     return EXIT_FAILURE;
-    // }(socketHandle + 1, &rfds, NULL, NULL, &tv);
-
-    string DEST_IP = "192.168.72.56";
+    if(argc != 2){
+        cout<<"Usage: "<<argv[0]<<" <DEST_IP>"<<endl;
+        return EXIT_FAILURE;
+    }
+    string DEST_IP = argv[1];
     uint16_t DEST_PORT = 8080;
-
-    // create 26 virtual nodes with their ip and port randomly for testing
-    // vector<pair<string,string>> ip_port_vns = {
-    //         {DEST_IP, "8000"}, {DEST_IP, "9090"}, {DEST_IP, "3000"},
-    //         {DEST_IP, "4500"}, {DEST_IP, "1234"}, {DEST_IP, "5555"},
-    //         {DEST_IP, "8081"}, {DEST_IP, "6000"}, {DEST_IP, "7000"},
-    //         {DEST_IP, "4040"}, {DEST_IP, "5050"}, {DEST_IP, "2020"},
-    //         {DEST_IP, "8082"}, {DEST_IP, "9091"}, {DEST_IP, "6060"},
-    //         {DEST_IP, "7070"}, {DEST_IP, "8085"}, {DEST_IP, "9095"},
-    //         {DEST_IP, "3030"}, {DEST_IP, "5055"}, {DEST_IP, "6065"},
-    //         {DEST_IP, "8088"}, {DEST_IP, "9099"}, {DEST_IP, "7077"},
-    //         {DEST_IP, "4044"}, {DEST_IP, "5059"}
-        
-    // };
     uint32_t ip_ = inet_addr(DEST_IP.c_str());
     VirtualNode* vn = new VirtualNode(ip_);
     cout << "Created Virtual Node "<< " with IP " 
@@ -367,8 +385,6 @@ int main(int argc, char* argv[]) {
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(vn->getTcpSockId(), &read_fds);
-        // cout<<"Is Tcp set?"<<FD_ISSET(vn->getTcpSockId(), &read_fds)<<endl;
-        // cout<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
         FD_SET(vn->getUdpSockId(), &read_fds);
         // cout<<"Is Udp set?"<<FD_ISSET(vn->getUdpSockId(), &read_fds)<<endl;
         int max_fd = max(vn->getTcpSockId(), vn->getUdpSockId());
@@ -382,6 +398,8 @@ int main(int argc, char* argv[]) {
             return EXIT_FAILURE;
         } else if (activity == 0) {
             cout << "Timeout occurred, no activity detected." << endl;
+            vn->displayAdjList();
+            vn->applyDijktras();
             continue;
         }
         else{
@@ -395,25 +413,6 @@ int main(int argc, char* argv[]) {
                 cout<<"Udp is set"<<endl;
                 vn->handleUdpMessage(read_fds);
             }
-
-            //print adj list
-            vn->displayAdjList();
-            // Periodically send LSP messages
-            // static time_t last_lsp_time = time(nullptr);
-            // time_t current_time = time(nullptr);
-    
-            // if (difftime(current_time, last_lsp_time) >= 15) {
-            //     for (auto& vn : virtualNodes) {
-            //         vn.sendPeriodicLSP();
-            //     }
-    
-            //     // Display the state of the adjacency list for each virtual node
-            //     for (const auto& vn : virtualNodes) {
-            //         vn.displayAdjList();
-            //     }
-    
-            //     last_lsp_time = current_time;
-            // }
         }
 
            
