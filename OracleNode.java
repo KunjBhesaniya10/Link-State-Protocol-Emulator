@@ -89,7 +89,7 @@ public class OracleNode {
     // monitor the config file for changes and update the adjacency list
         File file = new File(configFile);
         // System.err.println("Last modified time: " + lastModified + ", Current modified time: " + file.lastModified());
-        if((long)file.lastModified() > lastModified){ 
+        if(file.lastModified() > lastModified){ 
             lastModified = file.lastModified();             
             // System.err.println("Config file has been modified. Updating adjacency list...");
             try(BufferedReader br = new BufferedReader(new FileReader(file))){
@@ -226,7 +226,7 @@ public class OracleNode {
             System.out.println("Shutting down Oracle Node...");
             running = false;
             cleanup();
-            System.out.println("Oracle Node shut down gracefully.");
+            System.out.println("Oracle Node shut down.");
         }
     ));
 
