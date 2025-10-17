@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 
 public class OracleNode {
    
-   record Edge(Character target, int weight){}
+   record Edge(Character target, int weight){} //a constructor for edges in the graph from Node to target with weight
     
    HashMap<Character,SocketChannel> clientChannels; // list of connected clients
    HashMap<SocketChannel,Character> channelToClientId;
@@ -47,10 +47,10 @@ public class OracleNode {
             InetAddress addr = InetAddress.getByName(ip);
             this.selector = Selector.open();
             this.serverChannel = ServerSocketChannel.open();
-            this.serverChannel.bind(new InetSocketAddress(addr,port));
-            this.serverChannel.configureBlocking(false);
-            this.serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-            this.serverSocket = serverChannel.socket();
+            this.serverChannel.bind(new InetSocketAddress(addr,port)); //establish tcp server socket
+            this.serverChannel.configureBlocking(false); //non-blocking mode
+            this.serverChannel.register(selector, SelectionKey.OP_ACCEPT); //register for accept events
+            this.serverSocket = serverChannel.socket(); //get the server socket
         }
         catch(IOException e){
             e.printStackTrace();
@@ -110,7 +110,7 @@ public class OracleNode {
                             AdjacencyList.put(c, new java.util.ArrayList<>());
                         }
                     }
-                    char tmp = (char)(node.charValue() + 1);
+                    char tmp = (char)(node.charValue() + 1); // start from next node
                     while(j < parts.length){
                         // System.err.println("Adding edge from " + node + " to " + tmp + " with weight " + parts[j]);
                         if(Integer.parseInt(parts[j])  == -1){
@@ -181,8 +181,8 @@ public class OracleNode {
             
             if(edges.size() > 0){
                 for(Edge edge : edges){
-                    message[index++] = (byte) edge.target.charValue();
-                    index = addIpPortToMessage(message, index, edge.target);
+                    message[index++] = (byte) edge.target.charValue(); // target client ID
+                    index = addIpPortToMessage(message, index, edge.target); 
                     byte[] weightBytes = ByteBuffer.allocate(4).putInt(edge.weight).array();
                     for(int k=0; k<4; k++){
                         message[index++] = weightBytes[k];
