@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# Run VN.cpp 5 times in different terminals and store the output in different files
-for i in {1..5}
+# Run VN.cpp 6 times in different terminals 
+for i in {1..6}
 do
-  #compile the code
-  g++ VN.cpp -o VN
-  gnome-terminal -- bash -c "./VN  "10.51.19.186" > output_$i.txt"
+  gnome-terminal -- bash -c "g++ VN.cpp -o VN && ./VN 192.168.52.56 192.168.52.56; exec bash"
 done
