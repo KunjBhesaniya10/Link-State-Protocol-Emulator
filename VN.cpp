@@ -12,7 +12,8 @@
 #include <set>
 #include <limits.h>
 using namespace std;
-
+#define TIMEOUT_SEC 15
+#define PERIODIC_LSP_SEC 20
 #define BUFF_SIZE 4096
 
 // ANSI color macros
@@ -401,7 +402,7 @@ int main(int argc, char *argv[])
 
         int max_fd = max(vn->getTcpSockId(), vn->getUdpSockId());
         timeval t;
-        t.tv_sec = 20;
+        t.tv_sec = TIMEOUT_SEC;
         t.tv_usec = 0;
 
         int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, &t);
@@ -413,6 +414,8 @@ int main(int argc, char *argv[])
         else if (activity == 0)
         {
             cout << YELLOW << "[Timeout] No activity detected." << RESET << endl;
+            vn->displayAdjList();
+            vn->applyDijktras();
         }
         else
         {
@@ -429,12 +432,11 @@ int main(int argc, char *argv[])
         }
 
         time_t current_time = time(nullptr);
-        if (current_time - last_time > 15)
+        if (current_time - last_time > PERIODIC_LSP_SEC)
         {
             cout << BLUE << "Sending periodic LSP..." << RESET << endl;
             last_time = current_time;
             vn->displayAdjList();
-            vn->applyDijktras();
             vn->sendLSP();
             cout << GREEN << "Sent periodic LSP." << RESET << endl;
         }
