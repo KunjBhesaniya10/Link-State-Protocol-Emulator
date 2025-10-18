@@ -401,7 +401,7 @@ int main(int argc, char *argv[])
 
         int max_fd = max(vn->getTcpSockId(), vn->getUdpSockId());
         timeval t;
-        t.tv_sec = 15;
+        t.tv_sec = 20;
         t.tv_usec = 0;
 
         int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, &t);
@@ -431,7 +431,7 @@ int main(int argc, char *argv[])
         }
 
         time_t current_time = time(nullptr);
-        if (current_time - last_time > 50)
+        if (current_time - last_time > 15)
         {
             cout << BLUE << "Sending periodic LSP..." << RESET << endl;
             last_time = current_time;
