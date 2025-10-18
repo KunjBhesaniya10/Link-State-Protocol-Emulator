@@ -365,9 +365,9 @@ public:
                 }
             }
         }
-        cout << MAGENTA << "Dijkstra result from node " << char('A' + id) << RESET << endl;
+        cout << BLUE << "Dijkstra result from node " << char('A' + id) << RESET << endl;
         for (auto &entry : dist)
-            cout << MAGENTA << "Node " << char('A' + entry.first) << " Distance " << entry.second << RESET << endl;
+            cout <<"  Node " << char('A' + entry.first) <<MAGENTA<< " Distance " << entry.second << RESET << endl;
     }
 };
 
@@ -413,8 +413,6 @@ int main(int argc, char *argv[])
         else if (activity == 0)
         {
             cout << YELLOW << "[Timeout] No activity detected." << RESET << endl;
-            vn->displayAdjList();
-            vn->applyDijktras();
         }
         else
         {
@@ -436,6 +434,7 @@ int main(int argc, char *argv[])
             cout << BLUE << "Sending periodic LSP..." << RESET << endl;
             last_time = current_time;
             vn->displayAdjList();
+            vn->applyDijktras();
             vn->sendLSP();
             cout << GREEN << "Sent periodic LSP." << RESET << endl;
         }
